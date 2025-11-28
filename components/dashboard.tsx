@@ -1,8 +1,16 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { useState, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
 import {
   TrendingUp,
   TrendingDown,
@@ -12,80 +20,177 @@ import {
   CheckCircle,
   AlertCircle,
   Target,
-} from "lucide-react"
-import { Progress } from "@/components/ui/progress"
-
-// Dados de exemplo - preparados para futura integração com Supabase
-const mockData = {
-  receitas: 8500.0,
-  despesas: 5320.5,
-  proximosVencimentos: [
-    {
-      id: 1,
-      descricao: "Aluguel",
-      dia: 5,
-      valor: 1800.0,
-      formaPagamento: "Transferência",
-      pago: false,
-      atrasado: true,
-    },
-    { id: 2, descricao: "Internet", dia: 10, valor: 99.9, formaPagamento: "Boleto", pago: false, atrasado: false },
-    {
-      id: 3,
-      descricao: "Spotify",
-      dia: 12,
-      valor: 19.9,
-      formaPagamento: "Cartão de Crédito",
-      pago: true,
-      atrasado: false,
-    },
-    {
-      id: 4,
-      descricao: "Supermercado",
-      dia: 15,
-      valor: 450.0,
-      formaPagamento: "Cartão de Débito",
-      pago: false,
-      atrasado: false,
-    },
-    { id: 5, descricao: "Academia", dia: 20, valor: 129.9, formaPagamento: "Pix", pago: true, atrasado: false },
-  ],
-  categorias: [
-    { name: "Contas Fixas", value: 2500, fill: "hsl(var(--chart-1))" },
-    { name: "Despesas Variáveis", value: 1200, fill: "hsl(var(--chart-2))" },
-    { name: "Lazer", value: 800, fill: "hsl(var(--chart-3))" },
-    { name: "Educação", value: 500, fill: "hsl(var(--chart-4))" },
-    { name: "Outros", value: 320.5, fill: "hsl(var(--chart-5))" },
-  ],
-  metaFixada: {
-    nome: "Notebook novo",
-    valorTotal: 5399.0,
-    valorDepositado: 1000.0,
-    progresso: 18.5,
-  },
-}
+  Loader2,
+} from "lucide-react";
 
 export default function Dashboard() {
-  const [mesSelecionado, setMesSelecionado] = useState("2025-01")
+  // Alteração: Inicia com o mês atual, mas permite "todos"
+  const [mesSelecionado, setMesSelecionado] = useState(
+    new Date().toISOString().slice(0, 7)
+  );
+  const [loading, setLoading] = useState(true);
 
-  const saldo = mockData.receitas - mockData.despesas
+  const [resumo, setResumo] = useState({ receitas: 0, despesas: 0, saldo: 0 });
+  const [categoriasChart, setCategoriasChart] = useState<any[]>([]);
+  const [proximosVencimentos, setProximosVencimentos] = useState<any[]>([]);
+  const [metaFixada, setMetaFixada] = useState<any>(null);
+
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Buscar Lançamentos (Lógica alterada para suportar "todos")
+      let query = supabase.from("lancamentos").select("*");
+
+      // Só aplica filtro de data se NÃO for "todos"
+      if (mesSelecionado !== "todos") {
+        const [ano, mes] = mesSelecionado.split("-");
+        const dataInicio = `${mesSelecionado}-01`;
+        const dataFim = `${mesSelecionado}-${new Date(
+          parseInt(ano),
+          parseInt(mes),
+          0
+        ).getDate()}`;
+
+        query = query
+          .gte("data_vencimento", dataInicio)
+          .lte("data_vencimento", dataFim);
+      }
+
+      const { data: lancamentos, error: erroLancamentos } = await query;
+
+      if (erroLancamentos) throw erroLancamentos;
+
+      let totalReceitas = 0;
+      let totalDespesas = 0;
+      const categoriasMap = new Map();
+
+      lancamentos?.forEach((l) => {
+        const valor = Number(l.valor) || 0;
+        if (l.tipo === "Receita") {
+          totalReceitas += valor;
+        } else {
+          totalDespesas += valor;
+          const atual = categoriasMap.get(l.categoria) || 0;
+          categoriasMap.set(l.categoria, atual + valor);
+        }
+      });
+
+      setResumo({
+        receitas: totalReceitas,
+        despesas: totalDespesas,
+        saldo: totalReceitas - totalDespesas,
+      });
+
+      const cores = [
+        "hsl(var(--chart-1))",
+        "hsl(var(--chart-2))",
+        "hsl(var(--chart-3))",
+        "hsl(var(--chart-4))",
+        "hsl(var(--chart-5))",
+      ];
+
+      const dadosGrafico = Array.from(categoriasMap.entries())
+        .map(([name, value], index) => ({
+          name,
+          value,
+          fill: cores[index % cores.length],
+        }))
+        .sort((a, b) => b.value - a.value);
+
+      setCategoriasChart(dadosGrafico);
+
+      // 2. Buscar Vencimentos (Mantém lógica de próximos pendentes)
+      const hoje = new Date().toISOString().split("T")[0];
+      const { data: vencimentos } = await supabase
+        .from("lancamentos")
+        .select("*")
+        .eq("pago", false)
+        .eq("tipo", "Despesa")
+        .gte("data_vencimento", hoje)
+        .order("data_vencimento", { ascending: true })
+        .limit(5);
+
+      setProximosVencimentos(vencimentos || []);
+
+      // 3. Buscar Meta
+      const { data: meta, error: erroMeta } = await supabase
+        .from("metas")
+        .select("*")
+        .eq("fixada", true)
+        .limit(1)
+        .maybeSingle();
+
+      if (!erroMeta) {
+        setMetaFixada(meta);
+      }
+    } catch (error) {
+      console.error("Erro no dashboard:", error);
+    } finally {
+      setLoading(false);
+    }
+  }, [mesSelecionado]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const calcularProgresso = () => {
+    if (!metaFixada || !metaFixada.valor_total || metaFixada.valor_total === 0)
+      return 0;
+    return Math.min(
+      ((metaFixada.valor_depositado || 0) / metaFixada.valor_total) * 100,
+      100
+    );
+  };
+
+  // Gera lista de meses e adiciona a opção "Todos" no início
+  const mesesOpcoes = Array.from({ length: 6 }, (_, i) => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - i);
+    const value = d.toISOString().slice(0, 7);
+    const label = d.toLocaleString("pt-BR", { month: "long", year: "numeric" });
+    return { value, label: label.charAt(0).toUpperCase() + label.slice(1) };
+  });
+
+  // Adiciona opção "Geral (Todos)"
+  mesesOpcoes.unshift({ value: "todos", label: "Geral (Todos)" });
+
+  if (loading) {
+    return (
+      <div className="flex h-[50vh] w-full items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-balance">Olá, Will</h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-1">Aqui está um resumo das suas finanças</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-balance">
+            Dashboard
+          </h1>
+          <p className="text-sm md:text-base text-muted-foreground mt-1">
+            Visão geral das suas finanças
+          </p>
         </div>
         <Select value={mesSelecionado} onValueChange={setMesSelecionado}>
           <SelectTrigger className="w-full sm:w-[180px]">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="2025-01">Janeiro 2025</SelectItem>
-            <SelectItem value="2024-12">Dezembro 2024</SelectItem>
-            <SelectItem value="2024-11">Novembro 2024</SelectItem>
+            {mesesOpcoes.map((mes) => (
+              <SelectItem key={mes.value} value={mes.value}>
+                {mes.label}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
@@ -101,9 +206,16 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl md:text-3xl font-bold text-success">
-              R$ {mockData.receitas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {resumo.receitas.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Total de entradas</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {mesSelecionado === "todos"
+                ? "Todas as receitas"
+                : "Total de entradas"}
+            </p>
           </CardContent>
         </Card>
 
@@ -116,30 +228,56 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl md:text-3xl font-bold text-destructive">
-              R$ {mockData.despesas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+              {resumo.despesas.toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Total de saídas</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {mesSelecionado === "todos"
+                ? "Todas as despesas"
+                : "Total de saídas"}
+            </p>
           </CardContent>
         </Card>
 
         <Card
-          className={`border-l-4 ${saldo >= 0 ? "border-l-primary" : "border-l-destructive"} hover:shadow-lg transition-all duration-300 hover:-translate-y-1 sm:col-span-2 lg:col-span-1`}
+          className={`border-l-4 ${
+            resumo.saldo >= 0 ? "border-l-primary" : "border-l-destructive"
+          } hover:shadow-lg transition-all duration-300 hover:-translate-y-1 sm:col-span-2 lg:col-span-1`}
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Saldo</CardTitle>
-            <div className={`rounded-full ${saldo >= 0 ? "bg-primary/10" : "bg-destructive/10"} p-2`}>
-              <DollarSign className={`h-4 w-4 ${saldo >= 0 ? "text-primary" : "text-destructive"}`} />
+            <div
+              className={`rounded-full ${
+                resumo.saldo >= 0 ? "bg-primary/10" : "bg-destructive/10"
+              } p-2`}
+            >
+              <DollarSign
+                className={`h-4 w-4 ${
+                  resumo.saldo >= 0 ? "text-primary" : "text-destructive"
+                }`}
+              />
             </div>
           </CardHeader>
           <CardContent>
-            <div className={`text-2xl md:text-3xl font-bold ${saldo >= 0 ? "text-primary" : "text-destructive"}`}>
-              R$ {Math.abs(saldo).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+            <div
+              className={`text-2xl md:text-3xl font-bold ${
+                resumo.saldo >= 0 ? "text-primary" : "text-destructive"
+              }`}
+            >
+              {Math.abs(resumo.saldo).toLocaleString("pt-BR", {
+                style: "currency",
+                currency: "BRL",
+              })}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{saldo >= 0 ? "Saldo positivo" : "Saldo negativo"}</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {resumo.saldo >= 0 ? "Saldo positivo" : "Saldo negativo"}
+            </p>
           </CardContent>
         </Card>
 
-        {mockData.metaFixada && (
+        {metaFixada && (
           <Card className="border-l-4 border-l-primary hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
@@ -149,24 +287,27 @@ export default function Dashboard() {
             </CardHeader>
             <CardContent className="space-y-3">
               <div>
-                <h3 className="font-bold text-lg">{mockData.metaFixada.nome}</h3>
+                <h3 className="font-bold text-lg">{metaFixada.nome}</h3>
                 <p className="text-sm text-muted-foreground">
-                  R$ {mockData.metaFixada.valorDepositado.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} de R${" "}
-                  {mockData.metaFixada.valorTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  {Number(metaFixada.valor_depositado || 0).toLocaleString(
+                    "pt-BR",
+                    { style: "currency", currency: "BRL" }
+                  )}{" "}
+                  de{" "}
+                  {Number(metaFixada.valor_total || 0).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
                 </p>
               </div>
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span className="text-muted-foreground">Progresso</span>
-                  <span className="font-semibold">{mockData.metaFixada.progresso.toFixed(1)}%</span>
+                  <span className="font-semibold">
+                    {calcularProgresso().toFixed(1)}%
+                  </span>
                 </div>
-                <Progress value={mockData.metaFixada.progresso} className="h-3" />
-              </div>
-              <div className="text-sm text-muted-foreground">
-                Faltam R${" "}
-                {(mockData.metaFixada.valorTotal - mockData.metaFixada.valorDepositado).toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                })}
+                <Progress value={calcularProgresso()} className="h-3" />
               </div>
             </CardContent>
           </Card>
@@ -174,66 +315,70 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        {/* Gráfico de Categorias */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle>Despesas por Categoria</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {mockData.categorias.map((cat, idx) => {
-                const percentual = (cat.value / mockData.despesas) * 100
-                return (
-                  <div
-                    key={idx}
-                    className="group relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:shadow-md hover:border-primary/50"
-                  >
-                    {/* Barra de progresso de fundo */}
+            {categoriasChart.length > 0 ? (
+              <div className="space-y-3">
+                {categoriasChart.map((cat, idx) => {
+                  const percentual =
+                    resumo.despesas > 0
+                      ? (cat.value / resumo.despesas) * 100
+                      : 0;
+                  return (
                     <div
-                      className="absolute inset-0 opacity-5 transition-all group-hover:opacity-10"
-                      style={{
-                        background: `linear-gradient(to right, ${cat.fill} ${percentual}%, transparent ${percentual}%)`,
-                      }}
-                    />
-
-                    <div className="relative flex items-center justify-between gap-4">
-                      <div className="flex items-center gap-3 flex-1 min-w-0">
-                        <div
-                          className="h-10 w-10 rounded-lg flex-shrink-0 flex items-center justify-center"
-                          style={{ backgroundColor: `${cat.fill}20` }}
-                        >
-                          <div className="h-4 w-4 rounded-full" style={{ backgroundColor: cat.fill }} />
+                      key={idx}
+                      className="group relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:shadow-md hover:border-primary/50"
+                    >
+                      <div
+                        className="absolute inset-0 opacity-5 transition-all group-hover:opacity-10"
+                        style={{
+                          background: `linear-gradient(to right, ${cat.fill} ${percentual}%, transparent ${percentual}%)`,
+                        }}
+                      />
+                      <div className="relative flex items-center justify-between gap-4">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <div
+                            className="h-10 w-10 rounded-lg shrink-0 flex items-center justify-center"
+                            style={{ backgroundColor: `${cat.fill}20` }}
+                          >
+                            <div
+                              className="h-4 w-4 rounded-full"
+                              style={{ backgroundColor: cat.fill }}
+                            />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <h4 className="font-semibold text-sm md:text-base truncate">
+                              {cat.name}
+                            </h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {percentual.toFixed(1)}% do total
+                            </p>
+                          </div>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-semibold text-sm md:text-base truncate">{cat.name}</h4>
-                          <p className="text-xs text-muted-foreground mt-0.5">{percentual.toFixed(1)}% do total</p>
-                        </div>
-                      </div>
-
-                      <div className="text-right flex-shrink-0">
-                        <div className="text-lg md:text-xl font-bold">
-                          R$ {cat.value.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                        <div className="text-right shrink-0">
+                          <div className="text-lg md:text-xl font-bold">
+                            {cat.value.toLocaleString("pt-BR", {
+                              style: "currency",
+                              currency: "BRL",
+                            })}
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-
-              {/* Total */}
-              <div className="rounded-lg border-2 border-primary/20 bg-primary/5 p-4 mt-4">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-bold text-base md:text-lg">Total de Despesas</h4>
-                  <div className="text-xl md:text-2xl font-bold text-primary">
-                    R$ {mockData.despesas.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </div>
-                </div>
+                  );
+                })}
               </div>
-            </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                <p>Nenhuma despesa neste período.</p>
+              </div>
+            )}
           </CardContent>
         </Card>
 
-        {/* Próximos Vencimentos */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -243,45 +388,71 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {mockData.proximosVencimentos.map((item) => (
-                <div
-                  key={item.id}
-                  className={`flex items-start justify-between gap-4 rounded-lg border p-3 ${
-                    item.atrasado ? "border-destructive bg-destructive/5" : ""
-                  }`}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{item.descricao}</span>
-                      {item.pago ? (
-                        <CheckCircle className="h-4 w-4 text-success" />
-                      ) : item.atrasado ? (
-                        <AlertCircle className="h-4 w-4 text-destructive" />
-                      ) : null}
+              {proximosVencimentos.length > 0 ? (
+                proximosVencimentos.map((item) => {
+                  const hoje = new Date();
+                  const vencimento = new Date(item.data_vencimento);
+                  vencimento.setHours(23, 59, 59, 999);
+                  const isAtrasado = vencimento < hoje && !item.pago;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`flex items-start justify-between gap-4 rounded-lg border p-3 ${
+                        isAtrasado ? "border-destructive bg-destructive/5" : ""
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{item.descricao}</span>
+                          {item.pago ? (
+                            <CheckCircle className="h-4 w-4 text-success" />
+                          ) : isAtrasado ? (
+                            <AlertCircle className="h-4 w-4 text-destructive" />
+                          ) : null}
+                        </div>
+                        <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(item.data_vencimento).toLocaleDateString(
+                              "pt-BR"
+                            )}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <CreditCard className="h-3 w-3" />
+                            {item.forma_pagamento}
+                          </span>
+                        </div>
+                      </div>
+                      <div
+                        className={`text-right ${
+                          isAtrasado ? "text-destructive" : ""
+                        }`}
+                      >
+                        <div className="font-bold">
+                          {Number(item.valor).toLocaleString("pt-BR", {
+                            style: "currency",
+                            currency: "BRL",
+                          })}
+                        </div>
+                        {isAtrasado && (
+                          <span className="text-xs text-destructive">
+                            Atrasado
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        Dia {item.dia}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <CreditCard className="h-3 w-3" />
-                        {item.formaPagamento}
-                      </span>
-                    </div>
-                  </div>
-                  <div className={`text-right ${item.atrasado ? "text-destructive" : ""}`}>
-                    <div className="font-bold">
-                      R$ {item.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </div>
-                    {item.atrasado && <span className="text-xs text-destructive">Atrasado</span>}
-                  </div>
+                  );
+                })
+              ) : (
+                <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+                  <p>Nenhuma conta pendente próxima.</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
       </div>
     </div>
-  )
+  );
 }
