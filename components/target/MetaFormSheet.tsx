@@ -118,6 +118,7 @@ export function MetaFormSheet({
         auto_horario: formData.auto_horario || "00:00",
         auto_data_inicio: formData.auto_data_inicio || null,
         auto_meses_duracao: formData.auto_meses_duracao,
+        parcelamentos: formData.parcelamentos,
       };
 
       if (editingId) {
