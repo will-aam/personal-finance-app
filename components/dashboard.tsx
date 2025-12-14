@@ -12,9 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import {
-  TrendingUp,
   TrendingDown,
-  DollarSign,
   Calendar,
   CreditCard,
   CheckCircle,
@@ -24,13 +22,12 @@ import {
 } from "lucide-react";
 
 export default function Dashboard() {
-  // Alteração: Inicia com o mês atual, mas permite "todos"
   const [mesSelecionado, setMesSelecionado] = useState(
     new Date().toISOString().slice(0, 7)
   );
   const [loading, setLoading] = useState(true);
 
-  const [resumo, setResumo] = useState({ receitas: 0, despesas: 0, saldo: 0 });
+  const [totalDespesas, setTotalDespesas] = useState(0);
   const [categoriasChart, setCategoriasChart] = useState<any[]>([]);
   const [proximosVencimentos, setProximosVencimentos] = useState<any[]>([]);
   const [metaFixada, setMetaFixada] = useState<any>(null);
@@ -43,10 +40,9 @@ export default function Dashboard() {
         data: { user },
       } = await supabase.auth.getUser();
 
-      // 1. Buscar Lançamentos (Lógica alterada para suportar "todos")
+      // 1. Buscar Lançamentos
       let query = supabase.from("lancamentos").select("*");
 
-      // Só aplica filtro de data se NÃO for "todos"
       if (mesSelecionado !== "todos") {
         const [ano, mes] = mesSelecionado.split("-");
         const dataInicio = `${mesSelecionado}-01`;
@@ -65,26 +61,19 @@ export default function Dashboard() {
 
       if (erroLancamentos) throw erroLancamentos;
 
-      let totalReceitas = 0;
       let totalDespesas = 0;
       const categoriasMap = new Map();
 
       lancamentos?.forEach((l) => {
         const valor = Number(l.valor) || 0;
-        if (l.tipo === "Receita") {
-          totalReceitas += valor;
-        } else {
+        if (l.tipo === "Despesa") {
           totalDespesas += valor;
           const atual = categoriasMap.get(l.categoria) || 0;
           categoriasMap.set(l.categoria, atual + valor);
         }
       });
 
-      setResumo({
-        receitas: totalReceitas,
-        despesas: totalDespesas,
-        saldo: totalReceitas - totalDespesas,
-      });
+      setTotalDespesas(totalDespesas);
 
       const cores = [
         "hsl(var(--chart-1))",
@@ -104,7 +93,7 @@ export default function Dashboard() {
 
       setCategoriasChart(dadosGrafico);
 
-      // 2. Buscar Vencimentos (Mantém lógica de próximos pendentes)
+      // 2. Buscar Vencimentos
       const hoje = new Date().toISOString().split("T")[0];
       const { data: vencimentos } = await supabase
         .from("lancamentos")
@@ -169,15 +158,15 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-6 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="space-y-4 p-4 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl md:text-3xl font-bold text-balance">
-            Dashboard
+          <h1 className="text-xl md:text-2xl font-bold text-balance">
+            Controle de Despesas
           </h1>
-          <p className="text-sm md:text-base text-muted-foreground mt-1">
-            Visão geral das suas finanças
+          <p className="text-sm text-muted-foreground mt-1">
+            Acompanhe suas metas e despesas
           </p>
         </div>
         <Select value={mesSelecionado} onValueChange={setMesSelecionado}>
@@ -194,40 +183,21 @@ export default function Dashboard() {
         </Select>
       </div>
 
-      {/* Cards de Resumo */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <Card className="border-l-4 border-l-success hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+      {/* Cards Principais - Otimizados para Mobile */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2">
+        {/* Card de Despesas */}
+        <Card className="border-l-4 border-l-destructive hover:shadow-lg transition-all duration-300">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Receitas</CardTitle>
-            <div className="rounded-full bg-success/10 p-2">
-              <TrendingUp className="h-4 w-4 text-success" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl md:text-3xl font-bold text-success">
-              {resumo.receitas.toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {mesSelecionado === "todos"
-                ? "Todas as receitas"
-                : "Total de entradas"}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-l-4 border-l-destructive hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Despesas</CardTitle>
+            <CardTitle className="text-sm font-medium">
+              Total de Despesas
+            </CardTitle>
             <div className="rounded-full bg-destructive/10 p-2">
               <TrendingDown className="h-4 w-4 text-destructive" />
             </div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl md:text-3xl font-bold text-destructive">
-              {resumo.despesas.toLocaleString("pt-BR", {
+            <div className="text-2xl font-bold text-destructive">
+              {totalDespesas.toLocaleString("pt-BR", {
                 style: "currency",
                 currency: "BRL",
               })}
@@ -235,49 +205,14 @@ export default function Dashboard() {
             <p className="text-xs text-muted-foreground mt-1">
               {mesSelecionado === "todos"
                 ? "Todas as despesas"
-                : "Total de saídas"}
+                : "Total de saídas do mês"}
             </p>
           </CardContent>
         </Card>
 
-        <Card
-          className={`border-l-4 ${
-            resumo.saldo >= 0 ? "border-l-primary" : "border-l-destructive"
-          } hover:shadow-lg transition-all duration-300 hover:-translate-y-1 sm:col-span-2 lg:col-span-1`}
-        >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo</CardTitle>
-            <div
-              className={`rounded-full ${
-                resumo.saldo >= 0 ? "bg-primary/10" : "bg-destructive/10"
-              } p-2`}
-            >
-              <DollarSign
-                className={`h-4 w-4 ${
-                  resumo.saldo >= 0 ? "text-primary" : "text-destructive"
-                }`}
-              />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div
-              className={`text-2xl md:text-3xl font-bold ${
-                resumo.saldo >= 0 ? "text-primary" : "text-destructive"
-              }`}
-            >
-              {Math.abs(resumo.saldo).toLocaleString("pt-BR", {
-                style: "currency",
-                currency: "BRL",
-              })}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              {resumo.saldo >= 0 ? "Saldo positivo" : "Saldo negativo"}
-            </p>
-          </CardContent>
-        </Card>
-
+        {/* Card de Meta Fixada */}
         {metaFixada && (
-          <Card className="border-l-4 border-l-primary hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+          <Card className="border-l-4 border-l-primary hover:shadow-lg transition-all duration-300">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Target className="h-4 w-4" />
@@ -313,7 +248,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-2">
+      {/* Cards Secundários - Otimizados para Mobile */}
+      <div className="grid gap-4 grid-cols-1 lg:grid-cols-2">
+        {/* Despesas por Categoria */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle>Despesas por Categoria</CardTitle>
@@ -323,13 +260,11 @@ export default function Dashboard() {
               <div className="space-y-3">
                 {categoriasChart.map((cat, idx) => {
                   const percentual =
-                    resumo.despesas > 0
-                      ? (cat.value / resumo.despesas) * 100
-                      : 0;
+                    totalDespesas > 0 ? (cat.value / totalDespesas) * 100 : 0;
                   return (
                     <div
                       key={idx}
-                      className="group relative overflow-hidden rounded-lg border bg-card p-4 transition-all hover:shadow-md hover:border-primary/50"
+                      className="group relative overflow-hidden rounded-lg border bg-card p-3 transition-all hover:shadow-md hover:border-primary/50"
                     >
                       <div
                         className="absolute inset-0 opacity-5 transition-all group-hover:opacity-10"
@@ -340,16 +275,16 @@ export default function Dashboard() {
                       <div className="relative flex items-center justify-between gap-4">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                           <div
-                            className="h-10 w-10 rounded-lg shrink-0 flex items-center justify-center"
+                            className="h-8 w-8 rounded-lg shrink-0 flex items-center justify-center"
                             style={{ backgroundColor: `${cat.fill}20` }}
                           >
                             <div
-                              className="h-4 w-4 rounded-full"
+                              className="h-3 w-3 rounded-full"
                               style={{ backgroundColor: cat.fill }}
                             />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <h4 className="font-semibold text-sm md:text-base truncate">
+                            <h4 className="font-semibold text-sm truncate">
                               {cat.name}
                             </h4>
                             <p className="text-xs text-muted-foreground mt-0.5">
@@ -358,7 +293,7 @@ export default function Dashboard() {
                           </div>
                         </div>
                         <div className="text-right shrink-0">
-                          <div className="text-lg md:text-xl font-bold">
+                          <div className="text-base font-bold">
                             {cat.value.toLocaleString("pt-BR", {
                               style: "currency",
                               currency: "BRL",
@@ -378,6 +313,7 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
+        {/* Próximos Vencimentos */}
         <Card className="hover:shadow-md transition-shadow">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -403,7 +339,9 @@ export default function Dashboard() {
                     >
                       <div className="flex-1">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium">{item.descricao}</span>
+                          <span className="font-medium text-sm">
+                            {item.descricao}
+                          </span>
                           {item.pago ? (
                             <CheckCircle className="h-4 w-4 text-success" />
                           ) : isAtrasado ? (
@@ -428,7 +366,7 @@ export default function Dashboard() {
                           isAtrasado ? "text-destructive" : ""
                         }`}
                       >
-                        <div className="font-bold">
+                        <div className="font-bold text-sm">
                           {Number(item.valor).toLocaleString("pt-BR", {
                             style: "currency",
                             currency: "BRL",
