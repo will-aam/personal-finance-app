@@ -17,6 +17,7 @@ import {
   Loader2,
   Calendar as CalendarIcon,
   ExternalLink,
+  RefreshCw,
 } from "lucide-react";
 import { MetaFormSheet } from "@/components/target/MetaFormSheet";
 
@@ -28,67 +29,111 @@ export default function Metas() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [metaToEdit, setMetaToEdit] = useState<Meta | null>(null);
 
-  // NOVA FUNÇÃO: Processa os depósitos automáticos
+  // VERSÃO ROBUSTA DA FUNÇÃO DE PROCESSAMENTO
   const processarSimulacoes = async (metasCarregadas: Meta[]) => {
     let houveAtualizacao = false;
-    const agora = new Date(); // Pega a data e hora ATUAIS
+    const agora = new Date(); // Data/Hora atual do seu PC
+
+    console.log("--- INICIANDO PROCESSAMENTO DE SIMULAÇÕES ---");
+    console.log("Hora atual:", agora.toLocaleString());
 
     const metasAtualizadas = await Promise.all(
       metasCarregadas.map(async (meta) => {
+        // 1. Verificações de segurança
+        if (!meta.auto_deposito_ativo) return meta;
         if (
-          !meta.auto_deposito_ativo ||
           !meta.auto_valor ||
           !meta.auto_dia_cobranca ||
           !meta.auto_data_inicio
         ) {
+          console.log(`Meta ${meta.nome}: Dados incompletos para automação.`);
           return meta;
         }
 
-        const dataReferencia = meta.auto_ultimo_processamento
-          ? new Date(meta.auto_ultimo_processamento)
-          : new Date(meta.auto_data_inicio);
+        console.log(
+          `Checando Meta: ${meta.nome} | Dia Cobrança: ${meta.auto_dia_cobranca}`
+        );
 
-        if (!meta.auto_ultimo_processamento) {
+        // 2. CORREÇÃO DE FUSO HORÁRIO
+        // Criamos a data baseada nos números da string (Ano, Mês, Dia) para garantir que é local
+        const criarDataLocal = (dataString: string) => {
+          const [ano, mes, dia] = dataString.split("-").map(Number);
+          return new Date(ano, mes - 1, dia); // Meses no JS começam em 0
+        };
+
+        // Define a referência (início ou último processamento)
+        let dataReferencia: Date;
+
+        if (meta.auto_ultimo_processamento) {
+          dataReferencia = criarDataLocal(meta.auto_ultimo_processamento);
+        } else {
+          dataReferencia = criarDataLocal(meta.auto_data_inicio);
+          // Se for a primeira vez, voltamos 1 dia para garantir que o loop inclua o dia de início
           dataReferencia.setDate(dataReferencia.getDate() - 1);
         }
 
         let valorAdicional = 0;
-        const tempDate = new Date(dataReferencia);
-        tempDate.setDate(tempDate.getDate() + 1);
+        let novoUltimoProcessamento = meta.auto_ultimo_processamento;
 
-        while (tempDate <= agora) {
+        // Loop dia a dia
+        const tempDate = new Date(dataReferencia);
+        tempDate.setDate(tempDate.getDate() + 1); // Começa do dia seguinte à referência
+
+        // Zera as horas para comparar apenas datas no loop
+        const hojeMeiaNoite = new Date(
+          agora.getFullYear(),
+          agora.getMonth(),
+          agora.getDate()
+        );
+
+        while (tempDate <= hojeMeiaNoite) {
+          // Verificação de validade (meses de duração)
           if (meta.auto_meses_duracao && meta.auto_meses_duracao > 0) {
-            const dataInicio = new Date(meta.auto_data_inicio);
+            const dataInicio = criarDataLocal(meta.auto_data_inicio);
             const dataFim = new Date(dataInicio);
             dataFim.setMonth(dataFim.getMonth() + meta.auto_meses_duracao);
             if (tempDate > dataFim) break;
           }
 
+          // É O DIA DE COBRANÇA?
           if (tempDate.getDate() === meta.auto_dia_cobranca) {
             let deveProcessar = true;
 
-            // LÓGICA DE HORÁRIO:
+            // VERIFICAÇÃO DE HORÁRIO (Se for hoje)
             if (
-              tempDate.toDateString() === agora.toDateString() &&
+              tempDate.getTime() === hojeMeiaNoite.getTime() &&
               meta.auto_horario
             ) {
-              const [horaAgendada, minAgendado] = meta.auto_horario
-                .split(":")
-                .map(Number);
+              const [horaAg, minAg] = meta.auto_horario.split(":").map(Number);
               const horaAtual = agora.getHours();
               const minAtual = agora.getMinutes();
 
+              console.log(
+                `Verificando horário HOJE: Agendado ${meta.auto_horario} vs Atual ${horaAtual}:${minAtual}`
+              );
+
               if (
-                horaAtual < horaAgendada ||
-                (horaAtual === horaAgendada && minAtual < minAgendado)
+                horaAtual < horaAg ||
+                (horaAtual === horaAg && minAtual < minAg)
               ) {
                 deveProcessar = false;
-                break;
+                console.log("-> Ainda não deu o horário.");
+                break; // Para o loop, espera o horário
               }
             }
 
             if (deveProcessar) {
+              console.log(
+                `>>> DEPÓSITO DETECTADO: R$ ${
+                  meta.auto_valor
+                } em ${tempDate.toLocaleDateString()}`
+              );
               valorAdicional += meta.auto_valor;
+              // Formata YYYY-MM-DD localmente
+              const ano = tempDate.getFullYear();
+              const mes = String(tempDate.getMonth() + 1).padStart(2, "0");
+              const dia = String(tempDate.getDate()).padStart(2, "0");
+              novoUltimoProcessamento = `${ano}-${mes}-${dia}`;
             }
           }
 
@@ -99,20 +144,22 @@ export default function Metas() {
           houveAtualizacao = true;
           const novoValorDepositado =
             (meta.valor_depositado || 0) + valorAdicional;
-          const dataHojeISO = agora.toISOString().split("T")[0];
 
-          await supabase
+          // Atualiza Supabase
+          const { error } = await supabase
             .from("metas")
             .update({
               valor_depositado: novoValorDepositado,
-              auto_ultimo_processamento: dataHojeISO,
+              auto_ultimo_processamento: novoUltimoProcessamento,
             })
             .eq("id", meta.id);
+
+          if (error) console.error("Erro ao atualizar Supabase:", error);
 
           return {
             ...meta,
             valor_depositado: novoValorDepositado,
-            auto_ultimo_processamento: dataHojeISO,
+            auto_ultimo_processamento: novoUltimoProcessamento,
           };
         }
 
@@ -121,7 +168,11 @@ export default function Metas() {
     );
 
     if (houveAtualizacao) {
-      toast({ title: "Depósitos automáticos atualizados!" });
+      toast({
+        title: "Simulação Processada",
+        description: "Valores automáticos foram adicionados às suas metas.",
+        variant: "default", // ou "success" se tiver configurado
+      });
     }
 
     return metasAtualizadas;
@@ -270,6 +321,23 @@ export default function Metas() {
                     </span>
                   </p>
                 </div>
+
+                {/* BLOCO VISUAL DA SIMULAÇÃO ATIVA */}
+                {meta.auto_deposito_ativo && (
+                  <div className="mt-3 flex items-center gap-2 rounded-md bg-muted/50 p-2 text-xs text-muted-foreground border border-border/50">
+                    <RefreshCw className="h-3 w-3 animate-spin-slow text-green-600" />
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground">
+                        Depósito Automático Ativo
+                      </span>
+                      <span>
+                        + R$ {meta.auto_valor?.toFixed(2)} todo dia{" "}
+                        {meta.auto_dia_cobranca} às {meta.auto_horario}
+                      </span>
+                    </div>
+                  </div>
+                )}
+
                 {meta.data_conclusao && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
                     <CalendarIcon className="h-3 w-3" />

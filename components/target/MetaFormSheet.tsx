@@ -1,7 +1,7 @@
 "use client";
 
 import type React from "react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Meta } from "@/types";
 import { Button } from "@/components/ui/button";
@@ -19,7 +19,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import { Plus, Trash2 } from "lucide-react";
 
 interface MetaFormSheetProps {
   metaToEdit: Meta | null;
@@ -37,6 +36,13 @@ export function MetaFormSheet({
     metaToEdit?.id || null
   );
 
+  const [parcelamentoConfig, setParcelamentoConfig] = useState({
+    totalParcelas: metaToEdit?.auto_meses_duracao
+      ? String(metaToEdit.auto_meses_duracao)
+      : "",
+    valorParcela: metaToEdit?.auto_valor ? String(metaToEdit.auto_valor) : "",
+  });
+
   const [formData, setFormData] = useState<Partial<Meta>>({
     nome: metaToEdit?.nome || "",
     link: metaToEdit?.link || "",
@@ -47,46 +53,70 @@ export function MetaFormSheet({
       metaToEdit?.data_inicio || new Date().toISOString().split("T")[0],
     data_conclusao: metaToEdit?.data_conclusao || "",
     tipo: metaToEdit?.tipo || "vista",
-    parcelamentos: metaToEdit?.parcelamentos || [],
     fixada: metaToEdit?.fixada || false,
 
     // Depósito Automático Simulado
     auto_deposito_ativo: metaToEdit?.auto_deposito_ativo || false,
     auto_valor: metaToEdit?.auto_valor || 0,
     auto_dia_cobranca: metaToEdit?.auto_dia_cobranca || 15,
-    auto_horario: metaToEdit?.auto_horario || "12:00", // <-- NOVO CAMPO
+    auto_horario: metaToEdit?.auto_horario || "12:00",
     auto_data_inicio:
       metaToEdit?.auto_data_inicio || new Date().toISOString().split("T")[0],
     auto_meses_duracao: metaToEdit?.auto_meses_duracao || 0,
   });
 
-  const [novoParcelamento, setNovoParcelamento] = useState({
-    parcelas: 1,
-    valorParcela: 0,
-    parcelasPagas: 0,
-  });
+  // Efeito para sincronizar os campos quando o tipo muda para "parcelado"
+  useEffect(() => {
+    if (
+      formData.tipo === "parcelado" &&
+      parcelamentoConfig.totalParcelas &&
+      parcelamentoConfig.valorParcela
+    ) {
+      const total =
+        Number(parcelamentoConfig.totalParcelas) *
+        Number(parcelamentoConfig.valorParcela);
+      setFormData((prev) => ({
+        ...prev,
+        valor_total: total,
+        auto_deposito_ativo: true,
+        auto_valor: Number(parcelamentoConfig.valorParcela),
+        auto_meses_duracao: Number(parcelamentoConfig.totalParcelas),
+      }));
+    } else if (formData.tipo === "vista") {
+      // Se mudar para 'vista', limpa a automação para não confundir
+      setFormData((prev) => ({
+        ...prev,
+        auto_deposito_ativo: false,
+        auto_valor: 0,
+        auto_meses_duracao: 0,
+      }));
+    }
+  }, [
+    formData.tipo,
+    parcelamentoConfig.totalParcelas,
+    parcelamentoConfig.valorParcela,
+  ]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
       const payload = {
         nome: formData.nome,
-        link: formData.link,
+        link: formData.link || null,
         descricao: formData.descricao,
         valor_total: formData.valor_total,
         valor_depositado: formData.valor_depositado || 0,
-        data_inicio: formData.data_inicio,
+        data_inicio: formData.data_inicio || null,
         data_conclusao: formData.data_conclusao || null,
         tipo: formData.tipo,
-        parcelamentos: formData.parcelamentos,
         fixada: formData.fixada,
 
-        // Depósito Automático Simulado
+        // Pega os valores do formData, que podem ter sido editados pelo usuário
         auto_deposito_ativo: formData.auto_deposito_ativo,
         auto_valor: formData.auto_valor,
         auto_dia_cobranca: formData.auto_dia_cobranca,
-        auto_horario: formData.auto_horario, // <-- NOVO CAMPO
-        auto_data_inicio: formData.auto_data_inicio,
+        auto_horario: formData.auto_horario || "00:00",
+        auto_data_inicio: formData.auto_data_inicio || null,
         auto_meses_duracao: formData.auto_meses_duracao,
       };
 
@@ -114,17 +144,12 @@ export function MetaFormSheet({
     }
   };
 
-  const adicionarParcelamento = () => {
-    const novosParcelamentos = [
-      ...(formData.parcelamentos || []),
-      novoParcelamento,
-    ];
-    setFormData({ ...formData, parcelamentos: novosParcelamentos });
-  };
-
-  const removerParcelamento = (index: number) => {
-    const novos = formData.parcelamentos?.filter((_, i) => i !== index);
-    setFormData({ ...formData, parcelamentos: novos });
+  const handleParcelamentoChange = (
+    field: "totalParcelas" | "valorParcela",
+    value: string
+  ) => {
+    const newConfig = { ...parcelamentoConfig, [field]: value };
+    setParcelamentoConfig(newConfig);
   };
 
   return (
@@ -190,8 +215,14 @@ export function MetaFormSheet({
                       valor_total: Number(e.target.value),
                     })
                   }
+                  disabled={formData.tipo === "parcelado"}
                   required
                 />
+                {formData.tipo === "parcelado" && (
+                  <p className="text-[10px] text-muted-foreground">
+                    Calculado automaticamente
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="valorDepositado">Já Depositado (R$)</Label>
@@ -251,62 +282,56 @@ export function MetaFormSheet({
                 </TabsList>
               </Tabs>
             </div>
+
             {formData.tipo === "parcelado" && (
               <div className="rounded-lg border p-4 bg-accent/50">
-                <p className="text-sm text-muted-foreground mb-2">
-                  Simulação de parcelas
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure as parcelas para a simulação automática.
                 </p>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Qtd Parcelas"
-                    type="number"
-                    value={novoParcelamento.parcelas}
-                    onChange={(e) =>
-                      setNovoParcelamento({
-                        ...novoParcelamento,
-                        parcelas: Number(e.target.value),
-                      })
-                    }
-                  />
-                  <Input
-                    placeholder="Valor"
-                    type="number"
-                    value={novoParcelamento.valorParcela}
-                    onChange={(e) =>
-                      setNovoParcelamento({
-                        ...novoParcelamento,
-                        valorParcela: Number(e.target.value),
-                      })
-                    }
-                  />
-                  <Button
-                    type="button"
-                    onClick={adicionarParcelamento}
-                    variant="secondary"
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="totalParcelas">Quantas parcelas?</Label>
+                    <Input
+                      id="totalParcelas"
+                      type="number"
+                      min="1"
+                      value={parcelamentoConfig.totalParcelas}
+                      onChange={(e) =>
+                        handleParcelamentoChange(
+                          "totalParcelas",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="valorParcela">
+                      Valor de cada parcela (R$)
+                    </Label>
+                    <Input
+                      id="valorParcela"
+                      type="number"
+                      step="0.01"
+                      value={parcelamentoConfig.valorParcela}
+                      onChange={(e) =>
+                        handleParcelamentoChange("valorParcela", e.target.value)
+                      }
+                    />
+                  </div>
                 </div>
-                <div className="mt-2 space-y-1">
-                  {formData.parcelamentos?.map((p: any, i: number) => (
-                    <div
-                      key={i}
-                      className="flex justify-between text-xs bg-background p-2 rounded border"
-                    >
-                      <span>
-                        {p.parcelas}x de R$ {p.valorParcela}
-                      </span>
-                      <Trash2
-                        className="h-3 w-3 cursor-pointer"
-                        onClick={() => removerParcelamento(i)}
-                      />
-                    </div>
-                  ))}
-                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  Total a ser financiado:{" "}
+                  <span className="font-semibold">
+                    R${" "}
+                    {(
+                      Number(parcelamentoConfig.totalParcelas || 0) *
+                      Number(parcelamentoConfig.valorParcela || 0)
+                    ).toFixed(2)}
+                  </span>
+                </p>
               </div>
             )}
 
-            {/* SEÇÃO: Depósito Automático Simulado */}
             <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -314,7 +339,9 @@ export function MetaFormSheet({
                     Depósito Automático (Simulação)
                   </Label>
                   <p className="text-sm text-muted-foreground">
-                    Adiciona valor automaticamente todo mês
+                    {formData.tipo === "parcelado"
+                      ? "Configurado com base nas parcelas, mas você pode ajustar."
+                      : "Adicione um valor mensal para simular depósitos."}
                   </p>
                 </div>
                 <Switch
@@ -332,7 +359,7 @@ export function MetaFormSheet({
                       id="autoValor"
                       type="number"
                       step="0.01"
-                      value={formData.auto_valor}
+                      value={formData.auto_valor || ""}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
