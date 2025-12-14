@@ -42,7 +42,6 @@ export default function Dashboard() {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user) return;
 
       // 1. Buscar Lançamentos (Lógica alterada para suportar "todos")
       let query = supabase.from("lancamentos").select("*");

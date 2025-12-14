@@ -1,8 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase"; // Importação do Supabase
-import { AuthForm } from "@/components/auth-form"; // Importação do Login
+import { useState } from "react";
+// Removemos importações de AuthForm e useEffect do auth
 import Dashboard from "@/components/dashboard";
 import Lancamentos from "@/components/lancamentos";
 import Metas from "@/components/metas";
@@ -16,32 +15,14 @@ import {
   Moon,
   Sun,
   ChevronLeft,
-  LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  const [session, setSession] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+  // Removemos o estado de session e loading
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [theme, setTheme] = useState<"dark" | "light">("dark");
-
-  // Verifica a sessão ao carregar a página
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const toggleTheme = () => {
     const newTheme = theme === "dark" ? "light" : "dark";
@@ -49,25 +30,8 @@ export default function Home() {
     document.documentElement.classList.toggle("dark", newTheme === "dark");
   };
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-  };
+  // Não precisamos mais do handleLogout nem das verificações if (!session)
 
-  // Enquanto verifica a sessão, mostramos um carregando simples
-  if (loading) {
-    return (
-      <div className="flex h-screen items-center justify-center">
-        Carregando...
-      </div>
-    );
-  }
-
-  // Se NÃO tiver usuário logado, mostra a tela de Login
-  if (!session) {
-    return <AuthForm />;
-  }
-
-  // Se tiver usuário, mostra o App
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0 transition-all duration-300">
       <aside
@@ -183,17 +147,7 @@ export default function Home() {
             )}
           </Button>
 
-          <Button
-            variant="ghost"
-            className={`w-full text-destructive hover:text-destructive hover:bg-destructive/10 ${
-              sidebarCollapsed ? "px-0" : "justify-start gap-3"
-            }`}
-            onClick={handleLogout}
-            title={sidebarCollapsed ? "Sair" : ""}
-          >
-            <LogOut className="h-5 w-5" />
-            {!sidebarCollapsed && <span>Sair</span>}
-          </Button>
+          {/* Botão de Logout removido pois não há sessão */}
         </div>
       </aside>
 
@@ -208,6 +162,7 @@ export default function Home() {
         {activeTab === "configuracoes" && <Configuracoes />}
       </main>
 
+      {/* Menu Mobile mantido igual */}
       <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-sm md:hidden">
         <div className="grid grid-cols-4 gap-1 px-2">
           <button
