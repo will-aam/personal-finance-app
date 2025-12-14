@@ -1,9 +1,11 @@
+// types/index.ts
 export type TipoLancamento = "Receita" | "Despesa";
 
 export interface Lancamento {
   id: number; // Vamos manter number por enquanto para compatibilidade, mas no futuro mudaremos para string (UUID)
   user_id?: string;
   descricao: string;
+  link?: string;
   categoria: string;
   tipo: TipoLancamento;
   valor: number;
@@ -15,6 +17,7 @@ export interface Lancamento {
 }
 
 export interface Meta {
+  link: string | undefined;
   id: number;
   user_id?: string;
   nome: string;
