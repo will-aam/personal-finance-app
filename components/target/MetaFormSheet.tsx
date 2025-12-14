@@ -1,4 +1,3 @@
-// app/components/target/MetaFormSheet.tsx
 "use client";
 
 import type React from "react";
@@ -10,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch"; // Importe o componente Switch
 import { useToast } from "@/hooks/use-toast";
 import {
   Sheet,
@@ -18,17 +18,12 @@ import {
   SheetFooter,
   SheetHeader,
   SheetTitle,
-  SheetTrigger,
 } from "@/components/ui/sheet";
 import { Plus, Trash2 } from "lucide-react";
 
-// Definindo as props que o componente vai receber
 interface MetaFormSheetProps {
-  // A meta a ser editada (se houver)
   metaToEdit: Meta | null;
-  // Função para fechar o sheet
   onClose: () => void;
-  // Função para avisar o componente pai que a lista de metas precisa ser atualizada
   onSuccess: () => void;
 }
 
@@ -42,8 +37,10 @@ export function MetaFormSheet({
     metaToEdit?.id || null
   );
 
+  // Atualize o estado inicial para incluir os novos campos de automação
   const [formData, setFormData] = useState<Partial<Meta>>({
     nome: metaToEdit?.nome || "",
+    link: metaToEdit?.link || "",
     descricao: metaToEdit?.descricao || "",
     valor_total: metaToEdit?.valor_total || 0,
     valor_depositado: metaToEdit?.valor_depositado || 0,
@@ -53,6 +50,14 @@ export function MetaFormSheet({
     tipo: metaToEdit?.tipo || "vista",
     parcelamentos: metaToEdit?.parcelamentos || [],
     fixada: metaToEdit?.fixada || false,
+
+    // Novos campos para o Depósito Automático Simulado
+    auto_deposito_ativo: metaToEdit?.auto_deposito_ativo || false,
+    auto_valor: metaToEdit?.auto_valor || 0,
+    auto_dia_cobranca: metaToEdit?.auto_dia_cobranca || 15,
+    auto_data_inicio:
+      metaToEdit?.auto_data_inicio || new Date().toISOString().split("T")[0],
+    auto_meses_duracao: metaToEdit?.auto_meses_duracao || 0,
   });
 
   const [novoParcelamento, setNovoParcelamento] = useState({
@@ -66,6 +71,7 @@ export function MetaFormSheet({
     try {
       const payload = {
         nome: formData.nome,
+        link: formData.link,
         descricao: formData.descricao,
         valor_total: formData.valor_total,
         valor_depositado: formData.valor_depositado || 0,
@@ -74,6 +80,13 @@ export function MetaFormSheet({
         tipo: formData.tipo,
         parcelamentos: formData.parcelamentos,
         fixada: formData.fixada,
+
+        // Novos campos no payload
+        auto_deposito_ativo: formData.auto_deposito_ativo,
+        auto_valor: formData.auto_valor,
+        auto_dia_cobranca: formData.auto_dia_cobranca,
+        auto_data_inicio: formData.auto_data_inicio,
+        auto_meses_duracao: formData.auto_meses_duracao,
       };
 
       if (editingId) {
@@ -89,8 +102,8 @@ export function MetaFormSheet({
         toast({ title: "Meta criada!" });
       }
 
-      onSuccess(); // Avisa o componente pai para recarregar
-      onClose(); // Fecha o sheet
+      onSuccess();
+      onClose();
     } catch (error: any) {
       toast({
         title: "Erro ao salvar",
@@ -143,7 +156,7 @@ export function MetaFormSheet({
               <Label htmlFor="link">Link do Produto (opcional)</Label>
               <Input
                 id="link"
-                type="url" // O tipo 'url' ajuda o navegador a validar
+                type="url"
                 value={formData.link || ""}
                 onChange={(e) =>
                   setFormData({ ...formData, link: e.target.value })
@@ -291,6 +304,94 @@ export function MetaFormSheet({
                 </div>
               </div>
             )}
+
+            {/* NOVA SEÇÃO: Depósito Automático Simulado */}
+            <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
+              <div className="flex items-center justify-between">
+                <div className="space-y-0.5">
+                  <Label className="text-base">
+                    Depósito Automático (Simulação)
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    Adiciona valor automaticamente todo mês
+                  </p>
+                </div>
+                <Switch
+                  checked={formData.auto_deposito_ativo}
+                  onCheckedChange={(checked) =>
+                    setFormData({ ...formData, auto_deposito_ativo: checked })
+                  }
+                />
+              </div>
+              {formData.auto_deposito_ativo && (
+                <div className="grid gap-4 md:grid-cols-2 pt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="autoValor">Valor Mensal (R$)</Label>
+                    <Input
+                      id="autoValor"
+                      type="number"
+                      step="0.01"
+                      value={formData.auto_valor}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          auto_valor: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="autoDia">Dia do Depósito</Label>
+                    <Input
+                      id="autoDia"
+                      type="number"
+                      min="1"
+                      max="31"
+                      placeholder="Ex: 15"
+                      value={formData.auto_dia_cobranca}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          auto_dia_cobranca: Number(e.target.value),
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="autoInicio">Iniciar em</Label>
+                    <Input
+                      id="autoInicio"
+                      type="date"
+                      value={formData.auto_data_inicio}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          auto_data_inicio: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="autoMeses">Duração (Meses)</Label>
+                    <Input
+                      id="autoMeses"
+                      type="number"
+                      placeholder="0 para indeterminado"
+                      value={formData.auto_meses_duracao || ""}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          auto_meses_duracao: Number(e.target.value),
+                        })
+                      }
+                    />
+                    <p className="text-[10px] text-muted-foreground">
+                      Deixe vazio para infinito
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
           <SheetFooter className="gap-2 sm:justify-between">
             <Button type="button" variant="outline" onClick={onClose}>

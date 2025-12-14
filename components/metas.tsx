@@ -1,4 +1,3 @@
-// app/components/metas.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
@@ -19,16 +18,90 @@ import {
   Calendar as CalendarIcon,
   ExternalLink,
 } from "lucide-react";
-import { MetaFormSheet } from "@/components/target/MetaFormSheet"; // Ajuste o caminho se necessário
+import { MetaFormSheet } from "@/components/target/MetaFormSheet";
 
 export default function Metas() {
   const [metas, setMetas] = useState<Meta[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
-  // Estados para controlar o formulário
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [metaToEdit, setMetaToEdit] = useState<Meta | null>(null);
+
+  // NOVA FUNÇÃO: Processa os depósitos automáticos
+  const processarSimulacoes = async (metasCarregadas: Meta[]) => {
+    let houveAtualizacao = false;
+    const hoje = new Date();
+
+    const metasAtualizadas = await Promise.all(
+      metasCarregadas.map(async (meta) => {
+        if (
+          !meta.auto_deposito_ativo ||
+          !meta.auto_valor ||
+          !meta.auto_dia_cobranca ||
+          !meta.auto_data_inicio
+        ) {
+          return meta;
+        }
+
+        const dataReferencia = meta.auto_ultimo_processamento
+          ? new Date(meta.auto_ultimo_processamento)
+          : new Date(meta.auto_data_inicio);
+
+        if (!meta.auto_ultimo_processamento) {
+          dataReferencia.setDate(dataReferencia.getDate() - 1);
+        }
+
+        let valorAdicional = 0;
+        const tempDate = new Date(dataReferencia);
+        tempDate.setDate(tempDate.getDate() + 1);
+
+        while (tempDate <= hoje) {
+          if (meta.auto_meses_duracao && meta.auto_meses_duracao > 0) {
+            const dataInicio = new Date(meta.auto_data_inicio);
+            const dataFim = new Date(dataInicio);
+            dataFim.setMonth(dataFim.getMonth() + meta.auto_meses_duracao);
+            if (tempDate > dataFim) break;
+          }
+
+          if (tempDate.getDate() === meta.auto_dia_cobranca) {
+            valorAdicional += meta.auto_valor;
+          }
+
+          tempDate.setDate(tempDate.getDate() + 1);
+        }
+
+        if (valorAdicional > 0) {
+          houveAtualizacao = true;
+          const novoValorDepositado =
+            (meta.valor_depositado || 0) + valorAdicional;
+          const dataHojeISO = hoje.toISOString().split("T")[0];
+
+          await supabase
+            .from("metas")
+            .update({
+              valor_depositado: novoValorDepositado,
+              auto_ultimo_processamento: dataHojeISO,
+            })
+            .eq("id", meta.id);
+
+          return {
+            ...meta,
+            valor_depositado: novoValorDepositado,
+            auto_ultimo_processamento: dataHojeISO,
+          };
+        }
+
+        return meta;
+      })
+    );
+
+    if (houveAtualizacao) {
+      toast({ title: "Depósitos automáticos atualizados!" });
+    }
+
+    return metasAtualizadas;
+  };
 
   const fetchMetas = useCallback(async () => {
     try {
@@ -37,9 +110,12 @@ export default function Metas() {
         .from("metas")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (error) throw error;
-      setMetas(data as unknown as Meta[]);
+
+      const dadosProcessados = await processarSimulacoes(
+        data as unknown as Meta[]
+      );
+      setMetas(dadosProcessados);
     } catch (error: any) {
       toast({
         title: "Erro ao carregar metas",
@@ -80,12 +156,10 @@ export default function Metas() {
     }
   };
 
-  // Funções para abrir o formulário
   const handleOpenNewForm = () => {
     setMetaToEdit(null);
     setIsFormOpen(true);
   };
-
   const handleOpenEditForm = (meta: Meta) => {
     setMetaToEdit(meta);
     setIsFormOpen(true);
@@ -95,7 +169,6 @@ export default function Metas() {
     if (!meta.valor_total) return 0;
     return Math.min((meta.valor_depositado / meta.valor_total) * 100, 100);
   };
-
   const calcularFalta = (meta: Meta) => {
     return Math.max(meta.valor_total - meta.valor_depositado, 0);
   };
@@ -113,8 +186,6 @@ export default function Metas() {
           <Plus className="h-4 w-4" /> Nova Meta
         </Button>
       </div>
-
-      {/* O formulário agora é um componente separado */}
       {isFormOpen && (
         <MetaFormSheet
           metaToEdit={metaToEdit}
@@ -122,8 +193,6 @@ export default function Metas() {
           onSuccess={fetchMetas}
         />
       )}
-
-      {/* Lista */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {loading ? (
           <Loader2 className="h-8 w-8 animate-spin mx-auto col-span-full" />
@@ -146,7 +215,6 @@ export default function Metas() {
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-lg text-balance hover:underline flex items-center gap-2 text-primary"
-                      onClick={(e) => e.stopPropagation()}
                     >
                       {meta.nome}
                       <ExternalLink className="h-4 w-4" />
