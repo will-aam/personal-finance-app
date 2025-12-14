@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch"; // Importe o componente Switch
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import {
   Sheet,
@@ -37,7 +37,6 @@ export function MetaFormSheet({
     metaToEdit?.id || null
   );
 
-  // Atualize o estado inicial para incluir os novos campos de automação
   const [formData, setFormData] = useState<Partial<Meta>>({
     nome: metaToEdit?.nome || "",
     link: metaToEdit?.link || "",
@@ -51,10 +50,11 @@ export function MetaFormSheet({
     parcelamentos: metaToEdit?.parcelamentos || [],
     fixada: metaToEdit?.fixada || false,
 
-    // Novos campos para o Depósito Automático Simulado
+    // Depósito Automático Simulado
     auto_deposito_ativo: metaToEdit?.auto_deposito_ativo || false,
     auto_valor: metaToEdit?.auto_valor || 0,
     auto_dia_cobranca: metaToEdit?.auto_dia_cobranca || 15,
+    auto_horario: metaToEdit?.auto_horario || "12:00", // <-- NOVO CAMPO
     auto_data_inicio:
       metaToEdit?.auto_data_inicio || new Date().toISOString().split("T")[0],
     auto_meses_duracao: metaToEdit?.auto_meses_duracao || 0,
@@ -81,10 +81,11 @@ export function MetaFormSheet({
         parcelamentos: formData.parcelamentos,
         fixada: formData.fixada,
 
-        // Novos campos no payload
+        // Depósito Automático Simulado
         auto_deposito_ativo: formData.auto_deposito_ativo,
         auto_valor: formData.auto_valor,
         auto_dia_cobranca: formData.auto_dia_cobranca,
+        auto_horario: formData.auto_horario, // <-- NOVO CAMPO
         auto_data_inicio: formData.auto_data_inicio,
         auto_meses_duracao: formData.auto_meses_duracao,
       };
@@ -305,7 +306,7 @@ export function MetaFormSheet({
               </div>
             )}
 
-            {/* NOVA SEÇÃO: Depósito Automático Simulado */}
+            {/* SEÇÃO: Depósito Automático Simulado */}
             <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -358,6 +359,20 @@ export function MetaFormSheet({
                     />
                   </div>
                   <div className="space-y-2">
+                    <Label htmlFor="autoHorario">Horário do Depósito</Label>
+                    <Input
+                      id="autoHorario"
+                      type="time"
+                      value={formData.auto_horario}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          auto_horario: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
                     <Label htmlFor="autoInicio">Iniciar em</Label>
                     <Input
                       id="autoInicio"
@@ -371,7 +386,7 @@ export function MetaFormSheet({
                       }
                     />
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-2 md:col-span-2">
                     <Label htmlFor="autoMeses">Duração (Meses)</Label>
                     <Input
                       id="autoMeses"

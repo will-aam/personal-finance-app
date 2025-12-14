@@ -31,7 +31,7 @@ export default function Metas() {
   // NOVA FUNÇÃO: Processa os depósitos automáticos
   const processarSimulacoes = async (metasCarregadas: Meta[]) => {
     let houveAtualizacao = false;
-    const hoje = new Date();
+    const agora = new Date(); // Pega a data e hora ATUAIS
 
     const metasAtualizadas = await Promise.all(
       metasCarregadas.map(async (meta) => {
@@ -56,7 +56,7 @@ export default function Metas() {
         const tempDate = new Date(dataReferencia);
         tempDate.setDate(tempDate.getDate() + 1);
 
-        while (tempDate <= hoje) {
+        while (tempDate <= agora) {
           if (meta.auto_meses_duracao && meta.auto_meses_duracao > 0) {
             const dataInicio = new Date(meta.auto_data_inicio);
             const dataFim = new Date(dataInicio);
@@ -65,7 +65,31 @@ export default function Metas() {
           }
 
           if (tempDate.getDate() === meta.auto_dia_cobranca) {
-            valorAdicional += meta.auto_valor;
+            let deveProcessar = true;
+
+            // LÓGICA DE HORÁRIO:
+            if (
+              tempDate.toDateString() === agora.toDateString() &&
+              meta.auto_horario
+            ) {
+              const [horaAgendada, minAgendado] = meta.auto_horario
+                .split(":")
+                .map(Number);
+              const horaAtual = agora.getHours();
+              const minAtual = agora.getMinutes();
+
+              if (
+                horaAtual < horaAgendada ||
+                (horaAtual === horaAgendada && minAtual < minAgendado)
+              ) {
+                deveProcessar = false;
+                break;
+              }
+            }
+
+            if (deveProcessar) {
+              valorAdicional += meta.auto_valor;
+            }
           }
 
           tempDate.setDate(tempDate.getDate() + 1);
@@ -75,7 +99,7 @@ export default function Metas() {
           houveAtualizacao = true;
           const novoValorDepositado =
             (meta.valor_depositado || 0) + valorAdicional;
-          const dataHojeISO = hoje.toISOString().split("T")[0];
+          const dataHojeISO = agora.toISOString().split("T")[0];
 
           await supabase
             .from("metas")
