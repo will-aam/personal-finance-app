@@ -23,6 +23,14 @@ import { Button } from "@/components/ui/button";
 export default function Home() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+
+  const toggleTheme = () => {
+    const newTheme = theme === "dark" ? "light" : "dark";
+    setTheme(newTheme);
+    document.documentElement.classList.toggle("dark", newTheme === "dark");
+  };
+
   return (
     <div className="min-h-screen bg-background pb-16 md:pb-0">
       <aside
@@ -112,6 +120,25 @@ export default function Home() {
             )}
           </button>
         </nav>
+
+        <div className="border-t p-3">
+          <Button
+            variant="outline"
+            className={`w-full ${
+              sidebarCollapsed ? "px-0" : "justify-start gap-3"
+            }`}
+            onClick={toggleTheme}
+          >
+            {theme === "dark" ? (
+              <Sun className="h-5 w-5" />
+            ) : (
+              <Moon className="h-5 w-5" />
+            )}
+            {!sidebarCollapsed && (
+              <span>{theme === "dark" ? "Tema Claro" : "Tema Escuro"}</span>
+            )}
+          </Button>
+        </div>
       </aside>
 
       <main
@@ -122,7 +149,9 @@ export default function Home() {
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "lancamentos" && <Lancamentos />}
         {activeTab === "metas" && <Metas />}
-        {activeTab === "configuracoes" && <Configuracoes />}
+        {activeTab === "configuracoes" && (
+          <Configuracoes onNavigate={setActiveTab} />
+        )}
       </main>
 
       {/* Menu Mobile Minimalista */}
@@ -168,6 +197,20 @@ export default function Home() {
           </button>
         </div>
       </div>
+
+      {/* Botão para alternar tema no mobile */}
+      <Button
+        variant="outline"
+        size="icon"
+        className="fixed bottom-4 right-4 z-40 h-8 w-8 rounded-full md:hidden"
+        onClick={toggleTheme}
+      >
+        {theme === "dark" ? (
+          <Sun className="h-4 w-4" />
+        ) : (
+          <Moon className="h-4 w-4" />
+        )}
+      </Button>
     </div>
   );
 }
