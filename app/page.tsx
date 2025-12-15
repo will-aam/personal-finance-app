@@ -120,27 +120,7 @@ export default function Home() {
             )}
           </button>
         </nav>
-
-        <div className="border-t p-3">
-          <Button
-            variant="outline"
-            className={`w-full ${
-              sidebarCollapsed ? "px-0" : "justify-start gap-3"
-            }`}
-            onClick={toggleTheme}
-          >
-            {theme === "dark" ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-            {!sidebarCollapsed && (
-              <span>{theme === "dark" ? "Tema Claro" : "Tema Escuro"}</span>
-            )}
-          </Button>
-        </div>
       </aside>
-
       <main
         className={`min-h-screen transition-all duration-300 ${
           sidebarCollapsed ? "md:pl-20" : "md:pl-64"
@@ -153,64 +133,50 @@ export default function Home() {
           <Configuracoes onNavigate={setActiveTab} />
         )}
       </main>
-
+      {/* Menu Mobile Minimalista */}
       {/* Menu Mobile Minimalista */}
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
-        <div className="bg-card border rounded-full px-2 py-1 flex items-center gap-1">
+        <div className="bg-card border rounded-full px-3 py-2 flex items-center gap-2 shadow-md">
           {/* Botão Dashboard */}
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`flex flex-col items-center justify-center p-2 rounded-full transition-all ${
+            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "dashboard"
-                ? "text-primary bg-primary/10"
+                ? "text-primary bg-primary/15"
                 : "text-muted-foreground"
             }`}
           >
-            <HomeIcon className="h-4 w-4" />
-            <span className="text-xs mt-1">Home</span>
+            <HomeIcon className="h-5 w-5" />
+            <span className="text-[11px] mt-1">Home</span>
           </button>
 
           {/* Botão Lançamentos */}
           <button
             onClick={() => setActiveTab("lancamentos")}
-            className={`flex flex-col items-center justify-center p-2 rounded-full transition-all ${
+            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "lancamentos"
-                ? "text-primary bg-primary/10"
+                ? "text-primary bg-primary/15"
                 : "text-muted-foreground"
             }`}
           >
-            <FileText className="h-4 w-4" />
-            <span className="text-xs mt-1">Lançam.</span>
+            <FileText className="h-5 w-5" />
+            <span className="text-[11px] mt-1">Lançam.</span>
           </button>
 
           {/* Botão Configurações */}
           <button
             onClick={() => setActiveTab("configuracoes")}
-            className={`flex flex-col items-center justify-center p-2 rounded-full transition-all ${
+            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "configuracoes"
-                ? "text-primary bg-primary/10"
+                ? "text-primary bg-primary/15"
                 : "text-muted-foreground"
             }`}
           >
-            <Cog className="h-4 w-4" />
-            <span className="text-xs mt-1">Config</span>
+            <Cog className="h-5 w-5" />
+            <span className="text-[11px] mt-1">Config</span>
           </button>
         </div>
       </div>
-
-      {/* Botão para alternar tema no mobile */}
-      <Button
-        variant="outline"
-        size="icon"
-        className="fixed bottom-4 right-4 z-40 h-8 w-8 rounded-full md:hidden"
-        onClick={toggleTheme}
-      >
-        {theme === "dark" ? (
-          <Sun className="h-4 w-4" />
-        ) : (
-          <Moon className="h-4 w-4" />
-        )}
-      </Button>
     </div>
   );
 }
