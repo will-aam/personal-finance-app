@@ -1,3 +1,4 @@
+// app/page.tsx
 "use client";
 
 import { useState } from "react";
@@ -5,14 +6,13 @@ import Dashboard from "@/components/dashboard";
 import Lancamentos from "@/components/lancamentos";
 import Metas from "@/components/metas";
 import Configuracoes from "@/components/configuracoes";
+import DespesasFixas from "@/components/despesas-fixas"; // Importação garantida
 import {
   LayoutDashboard,
   Receipt,
   Target,
   Settings,
   Menu,
-  Moon,
-  Sun,
   ChevronLeft,
   Home as HomeIcon,
   FileText,
@@ -23,16 +23,13 @@ import { Button } from "@/components/ui/button";
 export default function Home() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
 
-  const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
+  // Removi o toggleTheme daqui pois ele já é gerenciado dentro do componente Configuracoes/ThemeCard
+  // ou pelo ThemeProvider global, evitando redundância e re-renderizações desnecessárias.
 
   return (
-    <div className="min-h-screen bg-background pb-16 md:pb-0">
+    <div className="min-h-screen bg-background pb-20 md:pb-0 transition-all duration-300">
+      {/* SIDEBAR (Desktop) */}
       <aside
         className={`hidden md:fixed md:left-0 md:top-0 md:flex md:h-screen md:flex-col md:border-r md:bg-card transition-all duration-300 ${
           sidebarCollapsed ? "md:w-20" : "md:w-64"
@@ -121,6 +118,8 @@ export default function Home() {
           </button>
         </nav>
       </aside>
+
+      {/* ÁREA PRINCIPAL */}
       <main
         className={`min-h-screen transition-all duration-300 ${
           sidebarCollapsed ? "md:pl-20" : "md:pl-64"
@@ -129,14 +128,21 @@ export default function Home() {
         {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "lancamentos" && <Lancamentos />}
         {activeTab === "metas" && <Metas />}
+
+        {/* Passamos o onNavigate para permitir ir para Despesas Fixas */}
         {activeTab === "configuracoes" && (
           <Configuracoes onNavigate={setActiveTab} />
         )}
+
+        {/* NOVA TELA DE DESPESAS FIXAS */}
+        {activeTab === "despesas_fixas" && (
+          <DespesasFixas onBack={() => setActiveTab("configuracoes")} />
+        )}
       </main>
-      {/* Menu Mobile Minimalista */}
-      {/* Menu Mobile Minimalista */}
+
+      {/* MENU MOBILE (Fixo embaixo) */}
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
-        <div className="bg-card border rounded-full px-3 py-2 flex items-center gap-2 shadow-md">
+        <div className="bg-card border rounded-full px-3 py-2 flex items-center gap-2 shadow-xl backdrop-blur-sm bg-opacity-95">
           {/* Botão Dashboard */}
           <button
             onClick={() => setActiveTab("dashboard")}
@@ -147,7 +153,7 @@ export default function Home() {
             }`}
           >
             <HomeIcon className="h-5 w-5" />
-            <span className="text-[11px] mt-1">Home</span>
+            <span className="text-[10px] mt-1 font-medium">Home</span>
           </button>
 
           {/* Botão Lançamentos */}
@@ -160,20 +166,33 @@ export default function Home() {
             }`}
           >
             <FileText className="h-5 w-5" />
-            <span className="text-[11px] mt-1">Lançam.</span>
+            <span className="text-[10px] mt-1 font-medium">Lançam.</span>
+          </button>
+
+          {/* Botão Metas (Adicionei de volta para consistência, mas pode remover se quiser) */}
+          <button
+            onClick={() => setActiveTab("metas")}
+            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+              activeTab === "metas"
+                ? "text-primary bg-primary/15"
+                : "text-muted-foreground"
+            }`}
+          >
+            <Target className="h-5 w-5" />
+            <span className="text-[10px] mt-1 font-medium">Metas</span>
           </button>
 
           {/* Botão Configurações */}
           <button
             onClick={() => setActiveTab("configuracoes")}
             className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
-              activeTab === "configuracoes"
+              activeTab === "configuracoes" || activeTab === "despesas_fixas"
                 ? "text-primary bg-primary/15"
                 : "text-muted-foreground"
             }`}
           >
             <Cog className="h-5 w-5" />
-            <span className="text-[11px] mt-1">Config</span>
+            <span className="text-[10px] mt-1 font-medium">Config</span>
           </button>
         </div>
       </div>
