@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-// Removemos importações de AuthForm e useEffect do auth
 import Dashboard from "@/components/dashboard";
 import Lancamentos from "@/components/lancamentos";
 import Metas from "@/components/metas";
@@ -15,25 +14,17 @@ import {
   Moon,
   Sun,
   ChevronLeft,
+  Home as HomeIcon,
+  FileText,
+  Cog,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
-  // Removemos o estado de session e loading
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [theme, setTheme] = useState<"dark" | "light">("dark");
-
-  const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    document.documentElement.classList.toggle("dark", newTheme === "dark");
-  };
-
-  // Não precisamos mais do handleLogout nem das verificações if (!session)
-
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-0 transition-all duration-300">
+    <div className="min-h-screen bg-background pb-16 md:pb-0">
       <aside
         className={`hidden md:fixed md:left-0 md:top-0 md:flex md:h-screen md:flex-col md:border-r md:bg-card transition-all duration-300 ${
           sidebarCollapsed ? "md:w-20" : "md:w-64"
@@ -62,9 +53,9 @@ export default function Home() {
             onClick={() => setActiveTab("dashboard")}
             className={`flex w-full items-center ${
               sidebarCollapsed ? "justify-center" : "gap-3"
-            } rounded-lg px-4 py-3 text-left transition-all hover:scale-105 ${
+            } rounded-lg px-4 py-3 text-left transition-all ${
               activeTab === "dashboard"
-                ? "bg-primary text-primary-foreground shadow-lg"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             title={sidebarCollapsed ? "Dashboard" : ""}
@@ -78,9 +69,9 @@ export default function Home() {
             onClick={() => setActiveTab("lancamentos")}
             className={`flex w-full items-center ${
               sidebarCollapsed ? "justify-center" : "gap-3"
-            } rounded-lg px-4 py-3 text-left transition-all hover:scale-105 ${
+            } rounded-lg px-4 py-3 text-left transition-all ${
               activeTab === "lancamentos"
-                ? "bg-primary text-primary-foreground shadow-lg"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             title={sidebarCollapsed ? "Lançamentos" : ""}
@@ -94,9 +85,9 @@ export default function Home() {
             onClick={() => setActiveTab("metas")}
             className={`flex w-full items-center ${
               sidebarCollapsed ? "justify-center" : "gap-3"
-            } rounded-lg px-4 py-3 text-left transition-all hover:scale-105 ${
+            } rounded-lg px-4 py-3 text-left transition-all ${
               activeTab === "metas"
-                ? "bg-primary text-primary-foreground shadow-lg"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             title={sidebarCollapsed ? "Metas" : ""}
@@ -108,9 +99,9 @@ export default function Home() {
             onClick={() => setActiveTab("configuracoes")}
             className={`flex w-full items-center ${
               sidebarCollapsed ? "justify-center" : "gap-3"
-            } rounded-lg px-4 py-3 text-left transition-all hover:scale-105 ${
+            } rounded-lg px-4 py-3 text-left transition-all ${
               activeTab === "configuracoes"
-                ? "bg-primary text-primary-foreground shadow-lg"
+                ? "bg-primary text-primary-foreground"
                 : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             }`}
             title={sidebarCollapsed ? "Configurações" : ""}
@@ -121,34 +112,6 @@ export default function Home() {
             )}
           </button>
         </nav>
-
-        <div className="border-t p-3 space-y-2">
-          <Button
-            variant="outline"
-            className={`w-full ${
-              sidebarCollapsed ? "px-0" : "justify-start gap-3"
-            }`}
-            onClick={toggleTheme}
-            title={
-              sidebarCollapsed
-                ? theme === "dark"
-                  ? "Tema Claro"
-                  : "Tema Escuro"
-                : ""
-            }
-          >
-            {theme === "dark" ? (
-              <Sun className="h-5 w-5" />
-            ) : (
-              <Moon className="h-5 w-5" />
-            )}
-            {!sidebarCollapsed && (
-              <span>{theme === "dark" ? "Tema Claro" : "Tema Escuro"}</span>
-            )}
-          </Button>
-
-          {/* Botão de Logout removido pois não há sessão */}
-        </div>
       </aside>
 
       <main
@@ -162,68 +125,49 @@ export default function Home() {
         {activeTab === "configuracoes" && <Configuracoes />}
       </main>
 
-      {/* Menu Mobile mantido igual */}
-      <nav className="fixed bottom-0 left-0 right-0 z-50 border-t bg-card/95 backdrop-blur-sm md:hidden">
-        <div className="grid grid-cols-4 gap-1 px-2">
+      {/* Menu Mobile Minimalista */}
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
+        <div className="bg-card border rounded-full px-2 py-1 flex items-center gap-1">
+          {/* Botão Dashboard */}
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg transition-all ${
+            className={`flex flex-col items-center justify-center p-2 rounded-full transition-all ${
               activeTab === "dashboard"
-                ? "text-primary bg-primary/10 scale-105"
-                : "text-muted-foreground active:scale-95"
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground"
             }`}
           >
-            <LayoutDashboard className="h-5 w-5" />
-            <span className="text-xs font-medium">Dashboard</span>
+            <HomeIcon className="h-4 w-4" />
+            <span className="text-xs mt-1">Home</span>
           </button>
+
+          {/* Botão Lançamentos */}
           <button
             onClick={() => setActiveTab("lancamentos")}
-            className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg transition-all ${
+            className={`flex flex-col items-center justify-center p-2 rounded-full transition-all ${
               activeTab === "lancamentos"
-                ? "text-primary bg-primary/10 scale-105"
-                : "text-muted-foreground active:scale-95"
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground"
             }`}
           >
-            <Receipt className="h-5 w-5" />
-            <span className="text-xs font-medium">Lançam.</span>
+            <FileText className="h-4 w-4" />
+            <span className="text-xs mt-1">Lançam.</span>
           </button>
-          <button
-            onClick={() => setActiveTab("metas")}
-            className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg transition-all ${
-              activeTab === "metas"
-                ? "text-primary bg-primary/10 scale-105"
-                : "text-muted-foreground active:scale-95"
-            }`}
-          >
-            <Target className="h-5 w-5" />
-            <span className="text-xs font-medium">Metas</span>
-          </button>
+
+          {/* Botão Configurações */}
           <button
             onClick={() => setActiveTab("configuracoes")}
-            className={`flex flex-col items-center gap-1 py-3 px-2 rounded-lg transition-all ${
+            className={`flex flex-col items-center justify-center p-2 rounded-full transition-all ${
               activeTab === "configuracoes"
-                ? "text-primary bg-primary/10 scale-105"
-                : "text-muted-foreground active:scale-95"
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground"
             }`}
           >
-            <Settings className="h-5 w-5" />
-            <span className="text-xs font-medium">Config</span>
+            <Cog className="h-4 w-4" />
+            <span className="text-xs mt-1">Config</span>
           </button>
         </div>
-      </nav>
-
-      <Button
-        variant="outline"
-        size="icon"
-        className="fixed bottom-24 right-4 z-40 h-12 w-12 rounded-full shadow-lg md:hidden bg-transparent"
-        onClick={toggleTheme}
-      >
-        {theme === "dark" ? (
-          <Sun className="h-5 w-5" />
-        ) : (
-          <Moon className="h-5 w-5" />
-        )}
-      </Button>
+      </div>
     </div>
   );
 }
