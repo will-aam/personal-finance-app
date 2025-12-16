@@ -125,7 +125,9 @@ export default function Home() {
           sidebarCollapsed ? "md:pl-20" : "md:pl-64"
         }`}
       >
-        {activeTab === "dashboard" && <Dashboard />}
+        {/* AQUI ESTÁ A ÚNICA MUDANÇA NECESSÁRIA: Passamos onNavigate para o Dashboard */}
+        {activeTab === "dashboard" && <Dashboard onNavigate={setActiveTab} />}
+
         {activeTab === "lancamentos" && <Lancamentos />}
         {activeTab === "metas" && <Metas />}
 
@@ -148,7 +150,7 @@ export default function Home() {
             onClick={() => setActiveTab("dashboard")}
             className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "dashboard"
-                ? "text-primary bg-primary/15"
+                ? "text-primary "
                 : "text-muted-foreground"
             }`}
           >
@@ -161,7 +163,7 @@ export default function Home() {
             onClick={() => setActiveTab("lancamentos")}
             className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "lancamentos"
-                ? "text-primary bg-primary/15"
+                ? "text-primary "
                 : "text-muted-foreground"
             }`}
           >
@@ -169,25 +171,12 @@ export default function Home() {
             <span className="text-[10px] mt-1 font-medium">Lançam.</span>
           </button>
 
-          {/* Botão Metas (Adicionei de volta para consistência, mas pode remover se quiser) */}
-          <button
-            onClick={() => setActiveTab("metas")}
-            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
-              activeTab === "metas"
-                ? "text-primary bg-primary/15"
-                : "text-muted-foreground"
-            }`}
-          >
-            <Target className="h-5 w-5" />
-            <span className="text-[10px] mt-1 font-medium">Metas</span>
-          </button>
-
           {/* Botão Configurações */}
           <button
             onClick={() => setActiveTab("configuracoes")}
             className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "configuracoes" || activeTab === "despesas_fixas"
-                ? "text-primary bg-primary/15"
+                ? "text-primary "
                 : "text-muted-foreground"
             }`}
           >
