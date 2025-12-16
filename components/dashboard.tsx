@@ -20,101 +20,150 @@ import {
   AlertCircle,
   Wallet,
   ArrowRight,
+  TrendingUp,
 } from "lucide-react";
+import { Button } from "./ui/button";
 
-// Adicionamos a prop para navegação
 interface DashboardProps {
   onNavigate?: (tab: string) => void;
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
+  // Estado do Filtro
   const [mesSelecionado, setMesSelecionado] = useState("todos");
+  const [mesesDisponiveis, setMesesDisponiveis] = useState<string[]>([]);
 
+  // Estados de Dados
   const [loading, setLoading] = useState(true);
-
   const [totalDespesas, setTotalDespesas] = useState(0);
-  const [totalDespesasFixas, setTotalDespesasFixas] = useState(0); // Novo Estado
-  const [categoriasChart, setCategoriasChart] = useState<any[]>([]);
+  const [totalDespesasFixas, setTotalDespesasFixas] = useState(0);
   const [proximosVencimentos, setProximosVencimentos] = useState<any[]>([]);
   const [metaFixada, setMetaFixada] = useState<any>(null);
+  const [progressoMeta, setProgressoMeta] = useState(0);
+
+  // 1. Função para formatar "YYYY-MM" em "Nome do Mês Ano"
+  const formatarMesLegivel = (anoMes: string) => {
+    if (anoMes === "todos") return "Todos os períodos";
+    const [ano, mes] = anoMes.split("-");
+    const data = new Date(Number(ano), Number(mes) - 1, 1);
+    // Formata: "dezembro de 2024"
+    const nomeMes = data.toLocaleString("pt-BR", { month: "long" });
+    const nomeMesCapitalizado =
+      nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1);
+    return `${nomeMesCapitalizado} de ${ano}`;
+  };
+
+  // 2. Carregar meses disponíveis baseados nos lançamentos reais
+  const fetchMeses = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("lancamentos")
+        .select("data_vencimento")
+        .order("data_vencimento", { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        // Extrai apenas o YYYY-MM único
+        const mesesSet = new Set<string>();
+        data.forEach((item) => {
+          if (item.data_vencimento) {
+            mesesSet.add(item.data_vencimento.slice(0, 7));
+          }
+        });
+        setMesesDisponiveis(Array.from(mesesSet));
+      }
+    } catch (error) {
+      console.error("Erro ao carregar meses:", error);
+    }
+  };
+
+  // 3. Inicialização: Carrega preferência salva e meses
+  useEffect(() => {
+    fetchMeses();
+    const filtroSalvo = localStorage.getItem("dashboardFiltroMes");
+    if (filtroSalvo) {
+      setMesSelecionado(filtroSalvo);
+    }
+  }, []);
+
+  // 4. Salvar preferência ao mudar
+  const handleFiltroChange = (valor: string) => {
+    setMesSelecionado(valor);
+    localStorage.setItem("dashboardFiltroMes", valor);
+  };
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
 
-      // --- 1. Lançamentos (Variáveis) ---
-      let query = supabase
+      // --- Consultas Base ---
+      let queryDespesas = supabase
         .from("lancamentos")
-        .select("*")
+        .select("valor, tipo")
         .eq("tipo", "Despesa");
 
-      if (mesSelecionado !== "todos") {
-        const [ano, mes] = mesSelecionado.split("-");
-        const inicioMes = `${ano}-${mes}-01`;
-        const fimMes = new Date(Number(ano), Number(mes), 0)
-          .toISOString()
-          .split("T")[0];
-        query = query
-          .gte("data_vencimento", inicioMes)
-          .lte("data_vencimento", fimMes);
-      }
-
-      const { data: lancamentos, error } = await query;
-      if (error) throw error;
-
-      const total =
-        lancamentos?.reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
-      setTotalDespesas(total);
-
-      // --- 2. Despesas Fixas (Total) ---
-      // Buscamos todas as despesas fixas para somar o valor total comprometido
-      const { data: fixas, error: errorFixas } = await supabase
-        .from("despesas_fixas")
-        .select("valor");
-
-      if (!errorFixas && fixas) {
-        const somaFixas = fixas.reduce(
-          (acc, curr) => acc + Number(curr.valor),
-          0
-        );
-        setTotalDespesasFixas(somaFixas);
-      }
-
-      // --- 3. Categorias ---
-      const categoriasMap = lancamentos?.reduce((acc: any, curr) => {
-        acc[curr.categoria] = (acc[curr.categoria] || 0) + Number(curr.valor);
-        return acc;
-      }, {});
-
-      const chartData = Object.entries(categoriasMap || {})
-        .map(([name, value]) => ({ name, value: Number(value) }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5);
-
-      setCategoriasChart(chartData);
-
-      // --- 4. Próximos Vencimentos ---
-      const hoje = new Date().toISOString().split("T")[0];
-      const { data: vencimentos } = await supabase
+      let queryVencimentos = supabase
         .from("lancamentos")
         .select("*")
         .eq("pago", false)
         .eq("tipo", "Despesa")
-        .gte("data_vencimento", hoje)
         .order("data_vencimento", { ascending: true })
-        .limit(5);
+        .limit(4);
 
-      setProximosVencimentos(vencimentos || []);
+      // --- Aplica Filtro de Mês se não for "todos" ---
+      if (mesSelecionado !== "todos") {
+        const [ano, mes] = mesSelecionado.split("-");
+        // Calcular último dia do mês para o filtro
+        const dataInicio = `${mesSelecionado}-01`;
+        const ultimoDia = new Date(Number(ano), Number(mes), 0).getDate();
+        const dataFim = `${mesSelecionado}-${ultimoDia}`;
 
-      // --- 5. Meta Fixada ---
-      const { data: metas } = await supabase
+        queryDespesas = queryDespesas
+          .gte("data_vencimento", dataInicio)
+          .lte("data_vencimento", dataFim);
+
+        // Para vencimentos, se filtrar o mês, mostra só vencimentos daquele mês
+        queryVencimentos = queryVencimentos
+          .gte("data_vencimento", dataInicio)
+          .lte("data_vencimento", dataFim);
+      }
+
+      // Executa Queries
+      const { data: despesasData } = await queryDespesas;
+      const { data: vencimentosData } = await queryVencimentos;
+
+      // Soma Despesas Variáveis
+      const total =
+        despesasData?.reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
+      setTotalDespesas(total);
+      setProximosVencimentos(vencimentosData || []);
+
+      // --- Despesas Fixas (Sempre soma todas do mês atual/futuro ou fixas gerais) ---
+      // A lógica de despesas fixas geralmente é mensal recorrente.
+      // Aqui vamos somar o total da tabela 'despesas_fixas' para ter uma estimativa.
+      const { data: fixasData } = await supabase
+        .from("despesas_fixas")
+        .select("valor");
+      const totalFixas =
+        fixasData?.reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
+      setTotalDespesasFixas(totalFixas);
+
+      // --- Metas ---
+      const { data: metaData } = await supabase
         .from("metas")
         .select("*")
-        .eq("fixada", true)
-        .limit(1);
+        .eq("fixada_dashboard", true)
+        .single();
 
-      if (metas && metas.length > 0) {
-        setMetaFixada(metas[0]);
+      if (metaData) {
+        setMetaFixada(metaData);
+        const porcentagem = Math.min(
+          (Number(metaData.valor_atual) / Number(metaData.valor_objetivo)) *
+            100,
+          100
+        );
+        setProgressoMeta(porcentagem);
       } else {
         setMetaFixada(null);
       }
@@ -129,179 +178,126 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
+  const formatMoney = (val: number) =>
+    val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+
   if (loading) {
     return (
-      <div className="flex h-[80vh] items-center justify-center">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
+      <div className="flex justify-center items-center h-[50vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
-  const formatMoney = (val: number) =>
-    val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
   return (
-    <div className="space-y-4 pb-20 animate-in fade-in slide-in-from-bottom-4 p-4 md:p-6 max-w-4xl mx-auto">
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold tracking-tight">Visão Geral</h2>
-        <Select value={mesSelecionado} onValueChange={setMesSelecionado}>
-          <SelectTrigger className="w-[140px] rounded-full border-primary/20 bg-background/50 backdrop-blur-sm">
-            <SelectValue placeholder="Mês" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="2025-01">Janeiro 2025</SelectItem>
-            <SelectItem value="2025-02">Fevereiro 2025</SelectItem>
-            <SelectItem value="2025-03">Março 2025</SelectItem>
-            {/* Adicione mais meses conforme necessário */}
-          </SelectContent>
-        </Select>
+    <div className="space-y-6 p-4 md:p-6 animate-in fade-in slide-in-from-bottom-4">
+      {/* Cabeçalho com Filtro */}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Visão Geral</h1>
+          <p className="text-muted-foreground">Resumo financeiro</p>
+        </div>
+
+        <div className="w-full sm:w-[200px]">
+          <Select value={mesSelecionado} onValueChange={handleFiltroChange}>
+            <SelectTrigger className="w-full">
+              <Calendar className="w-4 h-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Selecione o período" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos os períodos</SelectItem>
+              {mesesDisponiveis.map((mes) => (
+                <SelectItem key={mes} value={mes}>
+                  {formatarMesLegivel(mes)}
+                </SelectItem>
+              ))}
+              {/* Fallback caso a lista esteja vazia mas o usuário queira ver que funciona */}
+              {mesesDisponiveis.length === 0 && mesSelecionado !== "todos" && (
+                <SelectItem value={mesSelecionado}>
+                  {formatarMesLegivel(mesSelecionado)}
+                </SelectItem>
+              )}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* GRADE DE TOTAIS */}
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
-        {/* CARD PRINCIPAL: Lançamentos Variáveis */}
-        <Card className="border-none bg-linear-to-br from-red-950/30 to-background shadow-lg overflow-hidden relative">
-          <div className="absolute right-0 top-0 h-24 w-24 translate-x-8 -translate-y-2 rounded-full bg-red-500/10 blur-3xl" />
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Wallet className="h-4 w-4" />
+      {/* Cards de Totais */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Card Despesas Variáveis (Afetado pelo filtro) */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
               Gastos Variáveis
             </CardTitle>
+            <TrendingDown className="h-4 w-4 text-red-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-4xl font-bold tracking-tighter text-red-500">
+            <div className="text-2xl font-bold text-red-500">
               {formatMoney(totalDespesas)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              Lançados em{" "}
-              {mesSelecionado === "todos" ? "todos os períodos" : "este mês"}
+              {mesSelecionado === "todos"
+                ? "Total acumulado de lançamentos"
+                : `Total em ${formatarMesLegivel(mesSelecionado)}`}
             </p>
           </CardContent>
         </Card>
 
-        {/* NOVO CARD: Despesas Fixas (Clicável) */}
+        {/* Card Despesas Fixas (Geralmente fixo mensal) */}
         <Card
-          className="border-none bg-accent/20 hover:bg-accent/40 transition-all cursor-pointer shadow-sm group"
           onClick={() => onNavigate && onNavigate("despesas_fixas")}
+          className="cursor-pointer hover:bg-accent/50 transition-colors"
         >
-          <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <Calendar className="h-4 w-4" />
-              Despesas Fixas
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Contas Fixas Mensais
             </CardTitle>
-            <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:translate-x-1 transition-transform" />
+            <Wallet className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold tracking-tighter">
+            <div className="text-2xl font-bold text-blue-500">
               {formatMoney(totalDespesasFixas)}
             </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Comprometido mensalmente
-            </p>
+            <div className="flex items-center text-xs text-muted-foreground mt-1">
+              Estimativa mensal recorrente
+              <ArrowRight className="h-3 w-3 ml-1" />
+            </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* META FIXADA */}
-      {metaFixada && (
-        <Card className="border-l-4 border-l-primary shadow-sm bg-card/50 backdrop-blur-sm">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Target className="h-5 w-5 text-primary" />
-              Meta: {metaFixada.nome}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm font-medium">
-                <span className="text-muted-foreground">Progresso</span>
-                <span>
-                  {Math.min(
-                    (metaFixada.valor_depositado / metaFixada.valor_total) *
-                      100,
-                    100
-                  ).toFixed(1)}
-                  %
-                </span>
-              </div>
-              <Progress
-                value={
-                  (metaFixada.valor_depositado / metaFixada.valor_total) * 100
-                }
-                className="h-3 rounded-full"
-              />
-              <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                <span>{formatMoney(metaFixada.valor_depositado)}</span>
-                <span>de {formatMoney(metaFixada.valor_total)}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* GRÁFICO E VENCIMENTOS */}
-      <div className="grid gap-6 md:grid-cols-1">
-        {/* GRÁFICO DE CATEGORIAS */}
-        <Card className="shadow-sm">
+      {/* Meta Fixada e Próximos Vencimentos */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Próximos Vencimentos */}
+        <Card className="md:col-span-1">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
-              <TrendingDown className="h-5 w-5 text-orange-500" />
-              Onde estou gastando?
+              <AlertCircle className="h-4 w-4 text-orange-500" />
+              Contas a Pagar
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {categoriasChart.length > 0 ? (
-                categoriasChart.map((item, index) => (
-                  <div key={index} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium">{item.name}</span>
-                      <span className="text-muted-foreground">
-                        {formatMoney(item.value)}
-                      </span>
-                    </div>
-                    <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
-                      <div
-                        className="h-full bg-orange-500/80"
-                        style={{
-                          width: `${(item.value / totalDespesas) * 100}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  Sem dados para este período.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* PRÓXIMOS VENCIMENTOS */}
-        <Card className="shadow-sm">
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-blue-500" />
-              Contas a Pagar (Próximas)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
               {proximosVencimentos.length > 0 ? (
                 proximosVencimentos.map((item) => {
                   const dataVenc = new Date(item.data_vencimento);
-                  const isAtrasado = dataVenc < new Date() && !item.pago;
+                  // Ajuste de fuso horário simples para exibição correta do dia
+                  dataVenc.setMinutes(
+                    dataVenc.getMinutes() + dataVenc.getTimezoneOffset()
+                  );
+
+                  const hoje = new Date();
+                  hoje.setHours(0, 0, 0, 0);
+                  const isAtrasado = dataVenc < hoje;
 
                   return (
                     <div
                       key={item.id}
-                      className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent/50 transition-colors"
+                      className="flex items-center justify-between border-b last:border-0 pb-2 last:pb-0"
                     >
                       <div className="space-y-1">
-                        <p className="font-medium leading-none">
+                        <p className="font-medium leading-none text-sm">
                           {item.descricao}
                         </p>
                         <div className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -316,7 +312,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         </div>
                       </div>
                       <div className="text-right">
-                        <span className="font-bold block">
+                        <span className="font-bold block text-sm">
                           {formatMoney(item.valor)}
                         </span>
                         {isAtrasado && (
@@ -329,13 +325,67 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   );
                 })
               ) : (
-                <div className="py-6 text-center text-sm text-muted-foreground">
-                  Tudo pago! Nenhuma conta pendente próxima.
+                <div className="py-8 text-center text-sm text-muted-foreground border border-dashed rounded-lg">
+                  Nenhuma conta pendente para este filtro.
                 </div>
               )}
             </div>
           </CardContent>
         </Card>
+
+        {/* Meta Fixada */}
+        {metaFixada ? (
+          <Card className="md:col-span-1 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-3 opacity-10">
+              <Target className="h-24 w-24" />
+            </div>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                Meta Principal
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div>
+                  <h3 className="font-bold text-lg">{metaFixada.nome}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {formatMoney(metaFixada.valor_atual)} de{" "}
+                    {formatMoney(metaFixada.valor_objetivo)}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Progress value={progressoMeta} className="h-2" />
+                  <p className="text-xs text-right text-muted-foreground">
+                    {progressoMeta.toFixed(1)}% concluído
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={() => onNavigate && onNavigate("metas")}
+                >
+                  Ver Detalhes
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <Card className="md:col-span-1 flex flex-col items-center justify-center p-6 border-dashed text-center">
+            <Target className="h-8 w-8 text-muted-foreground mb-2" />
+            <p className="text-sm text-muted-foreground mb-4">
+              Nenhuma meta fixada
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => onNavigate && onNavigate("metas")}
+            >
+              Criar Meta
+            </Button>
+          </Card>
+        )}
       </div>
     </div>
   );
