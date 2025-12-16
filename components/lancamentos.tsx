@@ -45,6 +45,15 @@ export default function Lancamentos() {
   const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
 
+  // Estados para categorias e formas de pagamento do banco
+  const [categoriasDB, setCategoriasDB] = useState<
+    { id: number; nome: string }[]
+  >([]);
+  const [formasPagamentoDB, setFormasPagamentoDB] = useState<
+    { id: number; nome: string }[]
+  >([]);
+  const [loadingOptions, setLoadingOptions] = useState(true);
+
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroCategoria, setFiltroCategoria] = useState<string>("todas");
   const [filtroPago, setFiltroPago] = useState<string>("todos");
@@ -62,6 +71,39 @@ export default function Lancamentos() {
     pago: false,
     observacoes: "",
   });
+
+  // Função para buscar categorias e formas de pagamento
+  const fetchOpcoes = useCallback(async () => {
+    try {
+      setLoadingOptions(true);
+
+      // Buscar categorias
+      const { data: catData, error: catError } = await supabase
+        .from("categorias")
+        .select("*")
+        .order("nome");
+
+      if (catError) throw catError;
+      if (catData) setCategoriasDB(catData);
+
+      // Buscar formas de pagamento
+      const { data: payData, error: payError } = await supabase
+        .from("formas_pagamento")
+        .select("*")
+        .order("nome");
+
+      if (payError) throw payError;
+      if (payData) setFormasPagamentoDB(payData);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao carregar opções",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingOptions(false);
+    }
+  }, [toast]);
 
   const fetchLancamentos = useCallback(async () => {
     try {
@@ -96,7 +138,8 @@ export default function Lancamentos() {
 
   useEffect(() => {
     fetchLancamentos();
-  }, [fetchLancamentos]);
+    fetchOpcoes();
+  }, [fetchLancamentos, fetchOpcoes]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,10 +244,12 @@ export default function Lancamentos() {
   const resetForm = () => {
     setFormData({
       descricao: "",
-      categoria: "Contas Fixas",
+      categoria:
+        categoriasDB.length > 0 ? categoriasDB[0].nome : "Contas Fixas",
       tipo: "Despesa",
       valor: 0,
-      forma_pagamento: "Pix",
+      forma_pagamento:
+        formasPagamentoDB.length > 0 ? formasPagamentoDB[0].nome : "Pix",
       data_vencimento: new Date().toISOString().split("T")[0],
       pago: false,
       observacoes: "",
@@ -315,19 +360,21 @@ export default function Lancamentos() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Contas Fixas">
-                            Contas Fixas
-                          </SelectItem>
-                          <SelectItem value="Despesas Variáveis">
-                            Despesas Variáveis
-                          </SelectItem>
-                          <SelectItem value="Lazer">Lazer</SelectItem>
-                          <SelectItem value="Educação">Educação</SelectItem>
-                          <SelectItem value="Investimentos">
-                            Investimentos
-                          </SelectItem>
-                          <SelectItem value="Receita">Receita</SelectItem>
-                          <SelectItem value="Outros">Outros</SelectItem>
+                          {loadingOptions ? (
+                            <SelectItem value="loading" disabled>
+                              Carregando...
+                            </SelectItem>
+                          ) : categoriasDB.length === 0 ? (
+                            <SelectItem value="padrao" disabled>
+                              Nenhuma categoria cadastrada
+                            </SelectItem>
+                          ) : (
+                            categoriasDB.map((cat) => (
+                              <SelectItem key={cat.id} value={cat.nome}>
+                                {cat.nome}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -345,11 +392,9 @@ export default function Lancamentos() {
                         id="valor"
                         type="number"
                         step="0.01"
-                        // CORREÇÃO: Evita passar NaN para o value. Se for NaN ou undefined, mostra 0 ou vazio
                         value={formData.valor || ""}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
-                          // Se o usuário apagar tudo (NaN), setamos como 0
                           setFormData({
                             ...formData,
                             valor: isNaN(val) ? 0 : val,
@@ -370,19 +415,21 @@ export default function Lancamentos() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Pix">Pix</SelectItem>
-                          <SelectItem value="Cartão de Crédito">
-                            Cartão de Crédito
-                          </SelectItem>
-                          <SelectItem value="Cartão de Débito">
-                            Cartão de Débito
-                          </SelectItem>
-                          <SelectItem value="Dinheiro">Dinheiro</SelectItem>
-                          <SelectItem value="Boleto">Boleto</SelectItem>
-                          <SelectItem value="Transferência">
-                            Transferência
-                          </SelectItem>
-                          <SelectItem value="Outros">Outros</SelectItem>
+                          {loadingOptions ? (
+                            <SelectItem value="loading" disabled>
+                              Carregando...
+                            </SelectItem>
+                          ) : formasPagamentoDB.length === 0 ? (
+                            <SelectItem value="padrao" disabled>
+                              Nenhuma forma de pagamento cadastrada
+                            </SelectItem>
+                          ) : (
+                            formasPagamentoDB.map((fp) => (
+                              <SelectItem key={fp.id} value={fp.nome}>
+                                {fp.nome}
+                              </SelectItem>
+                            ))
+                          )}
                         </SelectContent>
                       </Select>
                     </div>
@@ -479,14 +526,11 @@ export default function Lancamentos() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todas">Todas</SelectItem>
-                    <SelectItem value="Contas Fixas">Contas Fixas</SelectItem>
-                    <SelectItem value="Despesas Variáveis">
-                      Despesas Variáveis
-                    </SelectItem>
-                    <SelectItem value="Lazer">Lazer</SelectItem>
-                    <SelectItem value="Educação">Educação</SelectItem>
-                    <SelectItem value="Receita">Receita</SelectItem>
-                    <SelectItem value="Outros">Outros</SelectItem>
+                    {categoriasDB.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.nome}>
+                        {cat.nome}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

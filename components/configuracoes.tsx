@@ -1,58 +1,87 @@
-// components/configuracoes.tsx
 "use client";
 
+import { useState, useEffect } from "react";
 import { Tag, CreditCard, Calendar, Target } from "lucide-react";
+import { supabase } from "@/lib/supabase";
 import { QuickActionCard } from "@/components/config/QuickActionCard";
-import { ThemeToggleCard } from "@/components/config/ThemeToggleCard"; // Importe o novo componente
-import { ListManagerCard } from "@/components/config/ListManagerCard";
+import { ThemeToggleCard } from "@/components/config/ThemeToggleCard";
+import { ListManagerCard, ListItem } from "@/components/config/ListManagerCard";
+import { useToast } from "@/hooks/use-toast";
 
 interface ConfiguracoesProps {
   onNavigate?: (tab: string) => void;
 }
 
 export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
-  // Removemos o useTheme daqui, pois agora ele está dentro do ThemeToggleCard
+  const { toast } = useToast();
+  // Iniciamos com arrays vazios para evitar undefined
+  const [categorias, setCategorias] = useState<ListItem[]>([]);
+  const [formasPagamento, setFormasPagamento] = useState<ListItem[]>([]);
 
-  const defaultCategorias = [
-    "Contas Fixas",
-    "Despesas Variáveis",
-    "Lazer",
-    "Educação",
-    "Investimentos",
-    "Receita",
-    "Outros",
-  ];
+  const fetchData = async () => {
+    // Busca simples sem filtro de usuário
+    const { data: catData } = await supabase
+      .from("categorias")
+      .select("*")
+      .order("nome");
+    if (catData) setCategorias(catData);
 
-  const defaultFormasPagamento = [
-    "Pix",
-    "Cartão de Crédito",
-    "Cartão de Débito",
-    "Dinheiro",
-    "Boleto",
-    "Transferência",
-    "Outros",
-  ];
+    const { data: payData } = await supabase
+      .from("formas_pagamento")
+      .select("*")
+      .order("nome");
+    if (payData) setFormasPagamento(payData);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const handleAdd = async (
+    table: "categorias" | "formas_pagamento",
+    nome: string
+  ) => {
+    // Insert simples sem user_id
+    const { error } = await supabase.from(table).insert([{ nome }]);
+
+    if (error) {
+      toast({
+        title: "Erro ao adicionar",
+        description: error.message,
+        variant: "destructive",
+      });
+      throw error;
+    }
+    fetchData();
+    toast({ title: "Adicionado com sucesso!" });
+  };
+
+  const handleRemove = async (
+    table: "categorias" | "formas_pagamento",
+    id: number
+  ) => {
+    const { error } = await supabase.from(table).delete().eq("id", id);
+    if (error) {
+      toast({ title: "Erro ao remover", variant: "destructive" });
+      throw error;
+    }
+    fetchData();
+    toast({ title: "Removido com sucesso!" });
+  };
 
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-      {/* Header Compacto */}
       <div className="pb-2">
         <h1 className="text-2xl font-bold">Configurações</h1>
       </div>
 
-      {/* GRID DE AÇÕES RÁPIDAS */}
       <div className="grid grid-cols-3 gap-3">
-        {/* 1. Card de Aparência - Agora com o componente dedicado e funcional */}
         <ThemeToggleCard />
-
-        {/* 2. Card de Metas */}
         <QuickActionCard
           icon={Target}
           label="Metas"
           onClick={() => onNavigate && onNavigate("metas")}
         />
-
-        {/* 3. Card de Despesas Fixas */}
         <QuickActionCard
           icon={Calendar}
           label="Despesas Fixas"
@@ -60,19 +89,22 @@ export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
         />
       </div>
 
-      {/* GERENCIADORES COMPACTOS */}
       <ListManagerCard
         title="Categorias"
         icon={Tag}
-        initialItems={defaultCategorias}
+        items={categorias} // Passamos o estado, que começa como []
         placeholderInput="Nova categoria"
+        onAdd={(nome) => handleAdd("categorias", nome)}
+        onRemove={(id) => handleRemove("categorias", id)}
       />
 
       <ListManagerCard
         title="Formas de Pagamento"
         icon={CreditCard}
-        initialItems={defaultFormasPagamento}
+        items={formasPagamento}
         placeholderInput="Nova forma"
+        onAdd={(nome) => handleAdd("formas_pagamento", nome)}
+        onRemove={(id) => handleRemove("formas_pagamento", id)}
       />
     </div>
   );

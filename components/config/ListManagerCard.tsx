@@ -1,41 +1,59 @@
-// components/config/ListManagerCard.tsx
 "use client";
 
 import { useState } from "react";
-import { Plus, X } from "lucide-react";
+import { Plus, X, Loader2 } from "lucide-react";
 import { LucideIcon } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn } from "@/lib/utils";
+
+// Interface ajustada para aceitar qualquer objeto que tenha id e nome
+export interface ListItem {
+  id: number;
+  nome: string;
+}
 
 interface ListManagerCardProps {
   title: string;
   icon: LucideIcon;
-  initialItems: string[];
+  items?: ListItem[]; // Tornamos opcional (?) para evitar erro se vier undefined
   placeholderInput: string;
+  onAdd: (nome: string) => Promise<void>;
+  onRemove: (id: number) => Promise<void>;
 }
 
 export function ListManagerCard({
   title,
   icon: Icon,
-  initialItems,
+  items = [], // Valor padrão: se vier undefined, assume array vazio []
   placeholderInput,
+  onAdd,
+  onRemove,
 }: ListManagerCardProps) {
-  const [items, setItems] = useState(initialItems);
   const [newItem, setNewItem] = useState("");
   const [isAddingItem, setIsAddingItem] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const handleAddItem = () => {
-    if (newItem.trim()) {
-      setItems([...items, newItem.trim()]);
+  const handleAddItem = async () => {
+    if (!newItem.trim()) return;
+    try {
+      setLoading(true);
+      await onAdd(newItem.trim());
       setNewItem("");
       setIsAddingItem(false);
+    } catch (error) {
+      console.error("Erro ao adicionar:", error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleRemoveItem = (indexToRemove: number) => {
-    setItems(items.filter((_, index) => index !== indexToRemove));
+  const handleRemoveItem = async (id: number) => {
+    try {
+      await onRemove(id);
+    } catch (error) {
+      console.error("Erro ao remover:", error);
+    }
   };
 
   return (
@@ -48,20 +66,22 @@ export function ListManagerCard({
       </CardHeader>
       <div className="px-6 pb-4">
         <div className="flex flex-wrap gap-2">
-          {items.map((item, index) => (
+          {/* O ?.map garante segurança extra, mas o items=[] lá em cima já resolve */}
+          {items?.map((item) => (
             <div
-              key={index}
+              key={item.id}
               className="group bg-secondary text-secondary-foreground rounded-md px-3 py-1 text-sm flex items-center gap-1 hover:bg-destructive hover:text-destructive-foreground transition-colors"
             >
-              <span>{item}</span>
+              <span>{item.nome}</span>
               <button
-                onClick={() => handleRemoveItem(index)}
+                onClick={() => handleRemoveItem(item.id)}
                 className="opacity-0 group-hover:opacity-100 transition-opacity"
               >
                 <X className="h-3 w-3" />
               </button>
             </div>
           ))}
+
           {!isAddingItem ? (
             <Button
               variant="outline"
@@ -78,19 +98,21 @@ export function ListManagerCard({
                 value={newItem}
                 onChange={(e) => setNewItem(e.target.value)}
                 placeholder={placeholderInput}
-                className="h-7 text-xs"
+                className="h-7 text-xs w-40"
                 autoFocus
+                disabled={loading}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    handleAddItem();
-                  } else if (e.key === "Escape") {
-                    setIsAddingItem(false);
-                    setNewItem("");
-                  }
+                  if (e.key === "Enter") handleAddItem();
+                  if (e.key === "Escape") setIsAddingItem(false);
                 }}
               />
-              <Button size="sm" className="h-7 text-xs" onClick={handleAddItem}>
-                Ok
+              <Button
+                size="sm"
+                className="h-7 text-xs"
+                onClick={handleAddItem}
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="h-3 w-3 animate-spin" /> : "Ok"}
               </Button>
             </div>
           )}
