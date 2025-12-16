@@ -28,9 +28,8 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
-  const [mesSelecionado, setMesSelecionado] = useState(
-    new Date().toISOString().slice(0, 7)
-  );
+  const [mesSelecionado, setMesSelecionado] = useState("todos");
+
   const [loading, setLoading] = useState(true);
 
   const [totalDespesas, setTotalDespesas] = useState(0);
