@@ -1,9 +1,9 @@
 // components/configuracoes.tsx
 "use client";
 
-import { Tag, CreditCard, Calendar, Target, Palette } from "lucide-react";
-import { useTheme } from "next-themes";
+import { Tag, CreditCard, Calendar, Target } from "lucide-react";
 import { QuickActionCard } from "@/components/config/QuickActionCard";
+import { ThemeToggleCard } from "@/components/config/ThemeToggleCard"; // Importe o novo componente
 import { ListManagerCard } from "@/components/config/ListManagerCard";
 
 interface ConfiguracoesProps {
@@ -11,7 +11,7 @@ interface ConfiguracoesProps {
 }
 
 export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
-  const { setTheme, theme } = useTheme();
+  // Removemos o useTheme daqui, pois agora ele está dentro do ThemeToggleCard
 
   const defaultCategorias = [
     "Contas Fixas",
@@ -42,16 +42,17 @@ export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
 
       {/* GRID DE AÇÕES RÁPIDAS */}
       <div className="grid grid-cols-3 gap-3">
-        <QuickActionCard
-          icon={Palette}
-          label="Aparência"
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-        />
+        {/* 1. Card de Aparência - Agora com o componente dedicado e funcional */}
+        <ThemeToggleCard />
+
+        {/* 2. Card de Metas */}
         <QuickActionCard
           icon={Target}
           label="Metas"
           onClick={() => onNavigate && onNavigate("metas")}
         />
+
+        {/* 3. Card de Despesas Fixas */}
         <QuickActionCard
           icon={Calendar}
           label="Despesas Fixas"

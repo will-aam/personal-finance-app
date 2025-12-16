@@ -1,7 +1,9 @@
+// app/layout.tsx
 import type React from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
+import { ThemeProvider } from "next-themes"; // <--- 1. IMPORTANTE: Importe o ThemeProvider
 import "./globals.css";
 
 // Configurei as variáveis para o Tailwind reconhecer as fontes corretamente
@@ -62,12 +64,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className="dark">
-      {/* Adicionei as variáveis de fonte aqui para o globals.css funcionar */}
+    // <--- 2. IMPORTANTE: Remova a classe "dark" da tag HTML e adicione suppressHydrationWarning
+    <html lang="pt-BR" suppressHydrationWarning>
       <body
         className={`${geist.variable} ${geistMono.variable} font-sans antialiased`}
       >
-        {children}
+        {/* <--- 3. IMPORTANTE: Adicione o ThemeProvider envolvendo os children */}
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system" // Começa com o tema do sistema do usuário
+          enableSystem // Permite que o usuário escolha "system"
+          disableTransitionOnChange // Evita animações estranhas ao mudar o tema
+        >
+          {children}
+        </ThemeProvider>
         <Analytics />
       </body>
     </html>
