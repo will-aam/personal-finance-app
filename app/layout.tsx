@@ -25,7 +25,7 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "Finanças Will",
+  title: "My Pocket",
   description:
     "Gerencie suas finanças pessoais, controle receitas, despesas e planeje suas metas financeiras",
 
@@ -54,7 +54,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Finanças Will",
+    title: "My Pocket",
   },
 };
 

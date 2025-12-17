@@ -37,7 +37,7 @@ export default function Home() {
       >
         <div className="flex h-16 items-center justify-between border-b px-4">
           {!sidebarCollapsed && (
-            <h1 className="text-xl font-bold text-primary">Finanças Will</h1>
+            <h1 className="text-xl font-bold text-primary">My Pocket</h1>
           )}
           <Button
             variant="ghost"

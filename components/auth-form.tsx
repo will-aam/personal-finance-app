@@ -78,7 +78,7 @@ export function AuthForm() {
     <div className="flex min-h-screen items-center justify-center bg-background p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <CardTitle className="text-2xl">Finanças Will</CardTitle>
+          <CardTitle className="text-2xl">My Pocket</CardTitle>
           <CardDescription>Entre para gerenciar suas finanças</CardDescription>
         </CardHeader>
         <CardContent>
