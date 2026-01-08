@@ -1,0 +1,18 @@
+name: Prevent Supabase Pause
+
+on:
+  schedule:
+    # Roda todo dia às 09:00 UTC (06:00 Brasil)
+    - cron: "0 9 * * *"
+  workflow_dispatch: # Permite rodar manualmente se quiser testar
+
+jobs:
+  ping-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase Database
+        run: |
+          # Faz uma requisição simples para a tabela de categorias apenas para gerar atividade
+          curl -f -X GET '${{ secrets.SUPABASE_URL }}/rest/v1/categorias?select=count' \
+          -H "apikey: ${{ secrets.SUPABASE_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_KEY }}"
