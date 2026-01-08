@@ -387,6 +387,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       key={item.id}
                       className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent/50 transition-colors"
                     >
+                      {/* texto */}
                       <div className="space-y-1">
                         <p className="font-medium leading-none text-sm">
                           {item.descricao}
