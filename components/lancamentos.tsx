@@ -567,10 +567,7 @@ export default function Lancamentos() {
           </Card>
         ) : (
           lancamentosFiltrados.map((lancamento) => (
-            <Card
-              key={lancamento.id}
-              className="hover:bg-accent/50 transition-all duration-200 hover:shadow-md hover:-translate-y-0.5"
-            >
+            <Card key={lancamento.id} className="hover:bg-accent/50">
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 space-y-2">

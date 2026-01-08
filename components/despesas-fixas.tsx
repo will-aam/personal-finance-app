@@ -17,6 +17,7 @@ import {
   TrendingDown,
   Wallet,
   X,
+  Calendar,
 } from "lucide-react";
 
 interface DespesasFixasProps {
@@ -148,43 +149,43 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
     colorClass?: string;
   }) => (
     <Card
-      className={`hover:bg-accent/50 transition-colors bg-card/40 ${
+      className={`transition-all duration-200 hover:shadow-md hover:-translate-y-1 bg-card/40 ${
         colorClass || "border-border/40"
       }`}
     >
-      <CardContent className="p-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex flex-col items-center justify-center h-10 w-10 rounded-lg bg-muted/50 border border-border/50 font-bold text-sm">
-            <span className="text-[9px] uppercase text-muted-foreground tracking-tighter">
-              Dia
-            </span>
-            {item.dia_vencimento}
+      <CardContent className="p-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-3">
+              <div className="flex flex-col items-center justify-center h-12 w-12 rounded-lg bg-muted/50 border border-border/50">
+                <Calendar className="h-4 w-4 text-muted-foreground mb-1" />
+                <span className="text-xs font-bold">{item.dia_vencimento}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm sm:text-base ">{item.nome}</p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-50/10"
+              onClick={() => handleExcluir(item.id)}
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
           </div>
-          <div>
-            <p className="font-medium text-sm sm:text-base truncate max-w-[150px]">
-              {item.nome}
+          <div className="text-right">
+            <p className="font-bold text-base sm:text-lg">
+              {formatMoney(item.valor)}
             </p>
           </div>
-        </div>
-        <div className="text-right">
-          <p className="font-bold text-sm sm:text-base">
-            {formatMoney(item.valor)}
-          </p>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400 mt-1"
-            onClick={() => handleExcluir(item.id)}
-          >
-            <Trash2 className="h-3 w-3" />
-          </Button>
         </div>
       </CardContent>
     </Card>
   );
 
   return (
-    <div className="space-y-6 pb-20 p-4 md:p-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-right-8 duration-300">
+    <div className="space-y-6 pb-20 p-4 md:p-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-right-8 duration-300">
       {/* Header com Botão Voltar */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -192,12 +193,12 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
             variant="ghost"
             size="icon"
             onClick={onBack}
-            className="rounded-full"
+            className="rounded-full hover:bg-accent/50"
           >
             <ArrowLeft className="h-6 w-6" />
           </Button>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
               Despesas Fixas
             </h1>
             <p className="text-muted-foreground hidden sm:block text-sm">
@@ -208,15 +209,16 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
       </div>
 
       {/* Card Principal - Resumo */}
-      <Card className="bg-red-950/20 border-red-900/30 shadow-sm relative overflow-hidden">
-        <CardContent className="p-6">
+      <Card className=" from-red-950/20 to-red-900/10 border-red-900/30 shadow-sm relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full -mr-16 -mt-16 blur-xl"></div>
+        <CardContent className="p-6 relative">
           <div className="flex flex-col gap-6">
             {/* Linha Superior: Total (Esq) e Switch (Dir) */}
             <div className="flex justify-between items-start">
               {/* Bloco do Total */}
               <div className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-full bg-red-500/10 flex items-center justify-center shrink-0 border border-red-500/20">
-                  <TrendingDown className="h-6 w-6 text-red-500" />
+                <div className="h-14 w-14 rounded-full bg-red-500/10 flex items-center justify-center shrink-0 border border-red-500/20">
+                  <TrendingDown className="h-7 w-7 text-red-500" />
                 </div>
                 <div>
                   <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
@@ -247,29 +249,29 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
 
             {/* Blocos Quinzenais (Visíveis apenas se ativado) */}
             {modoQuinzenal && (
-              <div className="grid grid-cols-2 gap-3 animate-in fade-in slide-in-from-top-2 pt-2">
+              <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 pt-2">
                 {/* Bloco 1: Dia 05 */}
-                <div className="bg-blue-500/5 rounded-xl p-4 border border-blue-500/10 flex flex-col justify-between">
+                <div className=" from-blue-500/5 to-blue-600/5 rounded-xl p-4 border border-blue-500/10 flex flex-col justify-between">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="h-4 w-4 text-blue-400" />
                     <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
                       Dia 05
                     </span>
                   </div>
-                  <p className="text-lg font-bold text-blue-100">
+                  <p className="text-xl font-bold text-blue-100">
                     {formatMoney(totalPagamentoDia05)}
                   </p>
                 </div>
 
                 {/* Bloco 2: Dia 15 */}
-                <div className="bg-green-500/5 rounded-xl p-4 border border-green-500/10 flex flex-col justify-between">
+                <div className=" from-green-500/5 to-green-600/5 rounded-xl p-4 border border-green-500/10 flex flex-col justify-between">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="h-4 w-4 text-green-400" />
                     <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">
                       Dia 15
                     </span>
                   </div>
-                  <p className="text-lg font-bold text-green-100">
+                  <p className="text-xl font-bold text-green-100">
                     {formatMoney(totalPagamentoDia15)}
                   </p>
                 </div>
@@ -387,13 +389,15 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                   </p>
                 </div>
               ) : (
-                itemsDia05.map((item) => (
-                  <DespesaCard
-                    key={item.id}
-                    item={item}
-                    colorClass="border-l-4 border-l-blue-500/50"
-                  />
-                ))
+                <div className="space-y-3">
+                  {itemsDia05.map((item) => (
+                    <DespesaCard
+                      key={item.id}
+                      item={item}
+                      colorClass="border-l-4 border-l-blue-500/50"
+                    />
+                  ))}
+                </div>
               )}
             </div>
 
@@ -412,19 +416,21 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                   </p>
                 </div>
               ) : (
-                itemsDia15.map((item) => (
-                  <DespesaCard
-                    key={item.id}
-                    item={item}
-                    colorClass="border-l-4 border-l-green-500/50"
-                  />
-                ))
+                <div className="space-y-3">
+                  {itemsDia15.map((item) => (
+                    <DespesaCard
+                      key={item.id}
+                      item={item}
+                      colorClass="border-l-4 border-l-green-500/50"
+                    />
+                  ))}
+                </div>
               )}
             </div>
           </div>
         ) : (
           // VISÃO PADRÃO (LISTA ÚNICA)
-          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
               <DespesaCard key={item.id} item={item} />
             ))}
