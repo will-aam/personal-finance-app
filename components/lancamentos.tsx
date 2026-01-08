@@ -24,6 +24,12 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import {
   Plus,
   Pencil,
   Trash2,
@@ -33,9 +39,13 @@ import {
   Filter,
   Loader2,
   CalendarIcon,
+  Calendar as CalendarLucide,
 } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { cn } from "@/lib/utils";
 
 export default function Lancamentos() {
   const [lancamentos, setLancamentos] = useState<Lancamento[]>([]);
@@ -45,7 +55,10 @@ export default function Lancamentos() {
   const [showFilters, setShowFilters] = useState(false);
   const { toast } = useToast();
 
-  // Estados para categorias e formas de pagamento do banco
+  // --- SELEÇÃO EM MASSA ---
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+
+  // --- ESTADOS DE OPÇÕES DO BANCO ---
   const [categoriasDB, setCategoriasDB] = useState<
     { id: number; nome: string }[]
   >([]);
@@ -54,9 +67,13 @@ export default function Lancamentos() {
   >([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
+  // --- FILTROS ---
   const [filtroTipo, setFiltroTipo] = useState<string>("todos");
   const [filtroCategoria, setFiltroCategoria] = useState<string>("todas");
   const [filtroPago, setFiltroPago] = useState<string>("todos");
+
+  // Estado de data
+  const [date, setDate] = useState<Date | undefined>(new Date());
   const [filtroMes, setFiltroMes] = useState(
     new Date().toISOString().slice(0, 7)
   );
@@ -72,42 +89,40 @@ export default function Lancamentos() {
     observacoes: "",
   });
 
-  // Função para buscar categorias e formas de pagamento
+  useEffect(() => {
+    if (date) {
+      const ano = date.getFullYear();
+      const mes = String(date.getMonth() + 1).padStart(2, "0");
+      setFiltroMes(`${ano}-${mes}`);
+    }
+  }, [date]);
+
   const fetchOpcoes = useCallback(async () => {
     try {
       setLoadingOptions(true);
-
-      // Buscar categorias
-      const { data: catData, error: catError } = await supabase
+      const { data: catData } = await supabase
         .from("categorias")
         .select("*")
         .order("nome");
-
-      if (catError) throw catError;
       if (catData) setCategoriasDB(catData);
 
-      // Buscar formas de pagamento
-      const { data: payData, error: payError } = await supabase
+      const { data: payData } = await supabase
         .from("formas_pagamento")
         .select("*")
         .order("nome");
-
-      if (payError) throw payError;
       if (payData) setFormasPagamentoDB(payData);
     } catch (error: any) {
-      toast({
-        title: "Erro ao carregar opções",
-        description: error.message,
-        variant: "destructive",
-      });
+      console.error("Erro ao carregar opções", error);
     } finally {
       setLoadingOptions(false);
     }
-  }, [toast]);
+  }, []);
 
   const fetchLancamentos = useCallback(async () => {
     try {
       setLoading(true);
+      setSelectedIds([]);
+
       const [ano, mes] = filtroMes.split("-");
       const dataInicio = `${filtroMes}-01`;
       const dataFim = `${filtroMes}-${new Date(
@@ -141,45 +156,79 @@ export default function Lancamentos() {
     fetchOpcoes();
   }, [fetchLancamentos, fetchOpcoes]);
 
+  // --- LÓGICA DE SELEÇÃO EM MASSA ---
+
+  const lancamentosFiltrados = lancamentos
+    .filter((l) => filtroTipo === "todos" || l.tipo === filtroTipo)
+    .filter(
+      (l) => filtroCategoria === "todas" || l.categoria === filtroCategoria
+    )
+    .filter(
+      (l) =>
+        filtroPago === "todos" || (filtroPago === "pago" ? l.pago : !l.pago)
+    );
+
+  const handleSelectAll = () => {
+    if (
+      selectedIds.length === lancamentosFiltrados.length &&
+      lancamentosFiltrados.length > 0
+    ) {
+      setSelectedIds([]); // Desmarcar todos
+    } else {
+      setSelectedIds(lancamentosFiltrados.map((l) => l.id)); // Marcar todos visíveis
+    }
+  };
+
+  const handleSelectOne = (id: number) => {
+    if (selectedIds.includes(id)) {
+      setSelectedIds(selectedIds.filter((item) => item !== id));
+    } else {
+      setSelectedIds([...selectedIds, id]);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    if (!confirm(`Tem certeza que deseja excluir ${selectedIds.length} itens?`))
+      return;
+
+    try {
+      const { error } = await supabase
+        .from("lancamentos")
+        .delete()
+        .in("id", selectedIds);
+
+      if (error) throw error;
+
+      toast({ title: `${selectedIds.length} lançamentos excluídos.` });
+      setLancamentos(lancamentos.filter((l) => !selectedIds.includes(l.id)));
+      setSelectedIds([]);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao excluir",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  // --- CRUD INDIVIDUAL ---
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     try {
       if (editingId) {
         const { error } = await supabase
           .from("lancamentos")
-          .update({
-            descricao: formData.descricao,
-            categoria: formData.categoria,
-            tipo: formData.tipo,
-            valor: formData.valor,
-            forma_pagamento: formData.forma_pagamento,
-            data_vencimento: formData.data_vencimento,
-            pago: formData.pago,
-            observacoes: formData.observacoes,
-          })
+          .update(formData)
           .eq("id", editingId);
-
         if (error) throw error;
         toast({ title: "Lançamento atualizado!" });
       } else {
-        const { error } = await supabase.from("lancamentos").insert([
-          {
-            descricao: formData.descricao,
-            categoria: formData.categoria,
-            tipo: formData.tipo,
-            valor: formData.valor,
-            forma_pagamento: formData.forma_pagamento,
-            data_vencimento: formData.data_vencimento,
-            pago: formData.pago,
-            observacoes: formData.observacoes,
-          },
-        ]);
-
+        const { error } = await supabase.from("lancamentos").insert([formData]);
         if (error) throw error;
         toast({ title: "Lançamento criado!" });
       }
-
       resetForm();
       fetchLancamentos();
     } catch (error: any) {
@@ -202,11 +251,7 @@ export default function Lancamentos() {
       toast({ title: "Lançamento excluído" });
       setLancamentos(lancamentos.filter((l) => l.id !== id));
     } catch (error: any) {
-      toast({
-        title: "Erro ao excluir",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao excluir", variant: "destructive" });
     }
   };
 
@@ -218,26 +263,13 @@ export default function Lancamentos() {
           l.id === lancamento.id ? { ...l, pago: novoStatus } : l
         )
       );
-
       const { error } = await supabase
         .from("lancamentos")
         .update({ pago: novoStatus })
         .eq("id", lancamento.id);
-
-      if (error) {
-        setLancamentos(
-          lancamentos.map((l) =>
-            l.id === lancamento.id ? { ...l, pago: !novoStatus } : l
-          )
-        );
-        throw error;
-      }
+      if (error) throw error;
     } catch (error: any) {
-      toast({
-        title: "Erro ao atualizar status",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Erro ao atualizar status", variant: "destructive" });
     }
   };
 
@@ -264,18 +296,9 @@ export default function Lancamentos() {
     setIsDialogOpen(true);
   };
 
-  const lancamentosFiltrados = lancamentos
-    .filter((l) => filtroTipo === "todos" || l.tipo === filtroTipo)
-    .filter(
-      (l) => filtroCategoria === "todas" || l.categoria === filtroCategoria
-    )
-    .filter(
-      (l) =>
-        filtroPago === "todos" || (filtroPago === "pago" ? l.pago : !l.pago)
-    );
-
   return (
     <div className="space-y-6 p-4 md:p-6 lg:p-8 max-w-7xl mx-auto">
+      {/* HEADER DE AÇÕES */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Lançamentos</h1>
@@ -283,21 +306,60 @@ export default function Lancamentos() {
             Gerencie suas receitas e despesas
           </p>
         </div>
+
         <div className="flex flex-col sm:flex-row gap-2">
-          <Input
-            type="month"
-            value={filtroMes}
-            onChange={(e) => setFiltroMes(e.target.value)}
-            className="w-full sm:w-auto"
-          />
+          {/* SELEÇÃO EM MASSA (BOTÃO DE EXCLUIR) */}
+          {selectedIds.length > 0 && (
+            <Button
+              variant="destructive"
+              onClick={handleBulkDelete}
+              className="animate-in fade-in zoom-in duration-200"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              Excluir ({selectedIds.length})
+            </Button>
+          )}
+
+          {/* DATE PICKER (SHADCN CALENDAR) */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button
+                variant={"outline"}
+                className={cn(
+                  "w-full sm:w-60 justify-start text-left font-normal",
+                  !date && "text-muted-foreground"
+                )}
+              >
+                <CalendarLucide className="mr-2 h-4 w-4" />
+                {date ? (
+                  format(date, "MMMM 'de' yyyy", { locale: ptBR })
+                ) : (
+                  <span>Selecione o mês</span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={date}
+                onSelect={(newDate) => {
+                  if (newDate) setDate(newDate);
+                }}
+                initialFocus
+                locale={ptBR}
+              />
+            </PopoverContent>
+          </Popover>
+
           <Button
             variant="outline"
             onClick={() => setShowFilters(!showFilters)}
             className="flex items-center gap-2"
           >
             <Filter className="h-4 w-4" />
-            <span>Filtros</span>
+            <span className="hidden sm:inline">Filtros</span>
           </Button>
+
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button
@@ -316,9 +378,6 @@ export default function Lancamentos() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase">
-                    Informações Básicas
-                  </h3>
                   <div className="space-y-2">
                     <Label htmlFor="descricao">Descrição</Label>
                     <Input
@@ -332,11 +391,11 @@ export default function Lancamentos() {
                   </div>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="tipo">Tipo</Label>
+                      <Label>Tipo</Label>
                       <Select
                         value={formData.tipo}
-                        onValueChange={(value: any) =>
-                          setFormData({ ...formData, tipo: value })
+                        onValueChange={(val: "Despesa" | "Receita") =>
+                          setFormData({ ...formData, tipo: val })
                         }
                       >
                         <SelectTrigger>
@@ -349,101 +408,65 @@ export default function Lancamentos() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="categoria">Categoria</Label>
+                      <Label>Categoria</Label>
                       <Select
                         value={formData.categoria}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, categoria: value })
+                        onValueChange={(val) =>
+                          setFormData({ ...formData, categoria: val })
                         }
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {loadingOptions ? (
-                            <SelectItem value="loading" disabled>
-                              Carregando...
+                          {categoriasDB.map((c) => (
+                            <SelectItem key={c.id} value={c.nome}>
+                              {c.nome}
                             </SelectItem>
-                          ) : categoriasDB.length === 0 ? (
-                            <SelectItem value="padrao" disabled>
-                              Nenhuma categoria cadastrada
-                            </SelectItem>
-                          ) : (
-                            categoriasDB.map((cat) => (
-                              <SelectItem key={cat.id} value={cat.nome}>
-                                {cat.nome}
-                              </SelectItem>
-                            ))
-                          )}
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase">
-                    Pagamento
-                  </h3>
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="space-y-2">
-                      <Label htmlFor="valor">Valor (R$)</Label>
+                      <Label>Valor</Label>
                       <Input
-                        id="valor"
                         type="number"
                         step="0.01"
                         value={formData.valor || ""}
-                        onChange={(e) => {
-                          const val = parseFloat(e.target.value);
+                        onChange={(e) =>
                           setFormData({
                             ...formData,
-                            valor: isNaN(val) ? 0 : val,
-                          });
-                        }}
-                        required
+                            valor: Number(e.target.value),
+                          })
+                        }
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="formaPagamento">Forma de Pagamento</Label>
+                      <Label>Forma Pagamento</Label>
                       <Select
                         value={formData.forma_pagamento}
-                        onValueChange={(value) =>
-                          setFormData({ ...formData, forma_pagamento: value })
+                        onValueChange={(val) =>
+                          setFormData({ ...formData, forma_pagamento: val })
                         }
                       >
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {loadingOptions ? (
-                            <SelectItem value="loading" disabled>
-                              Carregando...
+                          {formasPagamentoDB.map((f) => (
+                            <SelectItem key={f.id} value={f.nome}>
+                              {f.nome}
                             </SelectItem>
-                          ) : formasPagamentoDB.length === 0 ? (
-                            <SelectItem value="padrao" disabled>
-                              Nenhuma forma de pagamento cadastrada
-                            </SelectItem>
-                          ) : (
-                            formasPagamentoDB.map((fp) => (
-                              <SelectItem key={fp.id} value={fp.nome}>
-                                {fp.nome}
-                              </SelectItem>
-                            ))
-                          )}
+                          ))}
                         </SelectContent>
                       </Select>
                     </div>
                   </div>
-                </div>
-
-                <div className="space-y-4">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase">
-                    Controle
-                  </h3>
                   <div className="space-y-2">
-                    <Label htmlFor="dataVencimento">Data de Vencimento</Label>
+                    <Label>Vencimento</Label>
                     <Input
-                      id="dataVencimento"
                       type="date"
                       value={formData.data_vencimento}
                       onChange={(e) =>
@@ -452,7 +475,6 @@ export default function Lancamentos() {
                           data_vencimento: e.target.value,
                         })
                       }
-                      required
                     />
                   </div>
                   <div className="flex items-center space-x-2">
@@ -465,25 +487,10 @@ export default function Lancamentos() {
                     />
                     <Label htmlFor="pago">Marcar como pago</Label>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="observacoes">Observações (opcional)</Label>
-                    <Textarea
-                      id="observacoes"
-                      value={formData.observacoes || ""}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          observacoes: e.target.value,
-                        })
-                      }
-                      rows={3}
-                    />
-                  </div>
                 </div>
-
                 <div className="flex gap-2">
                   <Button type="submit" className="flex-1">
-                    {editingId ? "Salvar Alterações" : "Adicionar Lançamento"}
+                    {editingId ? "Salvar" : "Adicionar"}
                   </Button>
                   <Button type="button" variant="outline" onClick={resetForm}>
                     Cancelar
@@ -495,10 +502,11 @@ export default function Lancamentos() {
         </div>
       </div>
 
+      {/* ÁREA DE FILTROS AVANÇADOS */}
       {showFilters && (
         <Card className="animate-in slide-in-from-top-2 duration-300">
           <CardHeader>
-            <CardTitle className="text-base">Filtros</CardTitle>
+            <CardTitle className="text-base">Filtros Avançados</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-3">
@@ -552,6 +560,32 @@ export default function Lancamentos() {
         </Card>
       )}
 
+      {/* BARRA DE SELEÇÃO GLOBAL (SELECIONAR TODOS) - NOVO LOCAL */}
+      {lancamentosFiltrados.length > 0 && (
+        <div className="flex items-center justify-between bg-muted/30 p-3 rounded-lg border">
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="select-all-main"
+              checked={
+                lancamentosFiltrados.length > 0 &&
+                selectedIds.length === lancamentosFiltrados.length
+              }
+              onCheckedChange={handleSelectAll}
+            />
+            <Label
+              htmlFor="select-all-main"
+              className="cursor-pointer font-medium"
+            >
+              Selecionar Todos
+            </Label>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {selectedIds.length} selecionado(s)
+          </span>
+        </div>
+      )}
+
+      {/* LISTA DE LANÇAMENTOS */}
       <div className="space-y-3">
         {loading ? (
           <div className="flex justify-center py-8">
@@ -567,9 +601,25 @@ export default function Lancamentos() {
           </Card>
         ) : (
           lancamentosFiltrados.map((lancamento) => (
-            <Card key={lancamento.id} className="hover:bg-accent/50">
+            <Card
+              key={lancamento.id}
+              className={cn(
+                "hover:bg-accent/50 transition-colors border-l-4",
+                selectedIds.includes(lancamento.id)
+                  ? "bg-accent border-primary"
+                  : "border-transparent"
+              )}
+            >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
+                  {/* CHECKBOX DE SELEÇÃO INDIVIDUAL */}
+                  <div className="flex items-center h-full pt-1">
+                    <Checkbox
+                      checked={selectedIds.includes(lancamento.id)}
+                      onCheckedChange={() => handleSelectOne(lancamento.id)}
+                    />
+                  </div>
+
                   <div className="flex-1 space-y-2">
                     <div className="flex items-start gap-3">
                       <button
