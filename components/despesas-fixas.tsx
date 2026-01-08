@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { EditFixedExpenseDialog } from "@/components/EditFixedExpenseDialog"; // <--- Importação nova
 import {
   Plus,
   Trash2,
@@ -18,6 +19,7 @@ import {
   Wallet,
   X,
   Calendar,
+  Pencil, // <--- Ícone novo
 } from "lucide-react";
 
 interface DespesasFixasProps {
@@ -35,14 +37,17 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
   const [items, setItems] = useState<DespesaFixa[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados do Formulário
+  // Estados do Formulário de Criação
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [novoNome, setNovoNome] = useState("");
   const [novoValor, setNovoValor] = useState("");
   const [novoDia, setNovoDia] = useState("");
 
-  // Estado do Modo Quinzenal (Persistente)
+  // Estado do Modo Quinzenal
   const [modoQuinzenal, setModoQuinzenal] = useState(false);
+
+  // Estado para Edição
+  const [editingItem, setEditingItem] = useState<DespesaFixa | null>(null);
 
   const { toast } = useToast();
 
@@ -109,6 +114,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
   };
 
   const handleExcluir = async (id: number) => {
+    if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
     try {
       const { error } = await supabase
         .from("despesas_fixas")
@@ -125,10 +131,8 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
 
   // CÁLCULOS
   const totalComprometido = items.reduce((acc, item) => acc + item.valor, 0);
-
   const itemsDia05 = items.filter((item) => item.dia_vencimento < 15);
   const itemsDia15 = items.filter((item) => item.dia_vencimento >= 15);
-
   const totalPagamentoDia05 = itemsDia05.reduce(
     (acc, item) => acc + item.valor,
     0
@@ -162,17 +166,29 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                 <span className="text-xs font-bold">{item.dia_vencimento}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm sm:text-base ">{item.nome}</p>
+                <p className="font-medium text-sm sm:text-base">{item.nome}</p>
               </div>
             </div>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-50/10"
-              onClick={() => handleExcluir(item.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
+
+            {/* Ações (Editar e Excluir) */}
+            <div className="flex gap-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
+                onClick={() => setEditingItem(item)} // Abre o modal de edição
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-50/10"
+                onClick={() => handleExcluir(item.id)}
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="text-right">
             <p className="font-bold text-base sm:text-lg">
@@ -186,7 +202,15 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
 
   return (
     <div className="space-y-6 pb-20 p-4 md:p-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-right-8 duration-300">
-      {/* Header com Botão Voltar */}
+      {/* Componente de Edição (Modal) */}
+      <EditFixedExpenseDialog
+        open={!!editingItem}
+        onOpenChange={(open) => !open && setEditingItem(null)}
+        expense={editingItem}
+        onSuccess={fetchDespesas}
+      />
+
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
           <Button
@@ -208,14 +232,12 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
         </div>
       </div>
 
-      {/* Card Principal - Resumo */}
-      <Card className=" from-red-950/20 to-red-900/10 border-red-900/30 shadow-sm relative overflow-hidden">
+      {/* Card Resumo */}
+      <Card className="from-red-950/20 to-red-900/10 border-red-900/30 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full -mr-16 -mt-16 blur-xl"></div>
         <CardContent className="p-6 relative">
           <div className="flex flex-col gap-6">
-            {/* Linha Superior: Total (Esq) e Switch (Dir) */}
             <div className="flex justify-between items-start">
-              {/* Bloco do Total */}
               <div className="flex items-center gap-4">
                 <div className="h-14 w-14 rounded-full bg-red-500/10 flex items-center justify-center shrink-0 border border-red-500/20">
                   <TrendingDown className="h-7 w-7 text-red-500" />
@@ -230,7 +252,6 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                 </div>
               </div>
 
-              {/* Botão Switch - Discreto no canto superior direito */}
               <div className="flex items-center gap-2 opacity-80 hover:opacity-100 transition-opacity scale-90 origin-top-right">
                 <Label
                   htmlFor="quinzena-mode"
@@ -247,11 +268,9 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
               </div>
             </div>
 
-            {/* Blocos Quinzenais (Visíveis apenas se ativado) */}
             {modoQuinzenal && (
               <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 pt-2">
-                {/* Bloco 1: Dia 05 */}
-                <div className=" from-blue-500/5 to-blue-600/5 rounded-xl p-4 border border-blue-500/10 flex flex-col justify-between">
+                <div className="from-blue-500/5 to-blue-600/5 rounded-xl p-4 border border-blue-500/10 flex flex-col justify-between">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="h-4 w-4 text-blue-400" />
                     <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">
@@ -262,9 +281,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                     {formatMoney(totalPagamentoDia05)}
                   </p>
                 </div>
-
-                {/* Bloco 2: Dia 15 */}
-                <div className=" from-green-500/5 to-green-600/5 rounded-xl p-4 border border-green-500/10 flex flex-col justify-between">
+                <div className="from-green-500/5 to-green-600/5 rounded-xl p-4 border border-green-500/10 flex flex-col justify-between">
                   <div className="flex items-center gap-2 mb-2">
                     <Wallet className="h-4 w-4 text-green-400" />
                     <span className="text-[10px] font-bold text-green-400 uppercase tracking-widest">
@@ -281,7 +298,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
         </CardContent>
       </Card>
 
-      {/* Botão Expansível para Nova Despesa */}
+      {/* Botão Adicionar */}
       <div className="space-y-4">
         {!isFormOpen ? (
           <Button
@@ -354,7 +371,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
         )}
       </div>
 
-      {/* Lista de Despesas */}
+      {/* Lista */}
       <div className="space-y-4">
         <h3 className="font-semibold text-lg tracking-tight px-1">
           Suas Contas
@@ -372,16 +389,13 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
             </Button>
           </div>
         ) : modoQuinzenal ? (
-          // VISÃO DIVIDIDA (MODO QUINZENAL)
           <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
-            {/* Coluna 1: Dia 05 */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-2 border-b border-blue-500/20">
                 <h4 className="font-bold text-sm text-blue-400 uppercase tracking-wider">
                   1ª Quinzena (Dia 05)
                 </h4>
               </div>
-
               {itemsDia05.length === 0 ? (
                 <div className="p-4 border border-dashed border-blue-500/10 rounded-lg text-center">
                   <p className="text-xs text-muted-foreground italic">
@@ -401,14 +415,12 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
               )}
             </div>
 
-            {/* Coluna 2: Dia 15 */}
             <div className="space-y-3">
               <div className="flex items-center gap-2 pb-2 border-b border-green-500/20">
                 <h4 className="font-bold text-sm text-green-400 uppercase tracking-wider">
                   2ª Quinzena (Dia 15)
                 </h4>
               </div>
-
               {itemsDia15.length === 0 ? (
                 <div className="p-4 border border-dashed border-green-500/10 rounded-lg text-center">
                   <p className="text-xs text-muted-foreground italic">
@@ -429,7 +441,6 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
             </div>
           </div>
         ) : (
-          // VISÃO PADRÃO (LISTA ÚNICA)
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {items.map((item) => (
               <DespesaCard key={item.id} item={item} />
