@@ -6,7 +6,8 @@ import Dashboard from "@/components/dashboard";
 import Lancamentos from "@/components/lancamentos";
 import Metas from "@/components/metas";
 import Configuracoes from "@/components/configuracoes";
-import DespesasFixas from "@/components/despesas-fixas"; // Importação garantida
+import DespesasFixas from "@/components/despesas-fixas";
+import Receitas from "@/components/receitas"; // <--- NOVO IMPORT
 import {
   LayoutDashboard,
   Receipt,
@@ -17,6 +18,7 @@ import {
   Home as HomeIcon,
   FileText,
   Cog,
+  PieChart, // <--- NOVO ÍCONE PARA "PLANOS"
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -24,12 +26,9 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
-  // Removi o toggleTheme daqui pois ele já é gerenciado dentro do componente Configuracoes/ThemeCard
-  // ou pelo ThemeProvider global, evitando redundância e re-renderizações desnecessárias.
-
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0 transition-all duration-300">
-      {/* SIDEBAR (Desktop) */}
+      {/* --- SIDEBAR (Desktop) --- */}
       <aside
         className={`hidden md:fixed md:left-0 md:top-0 md:flex md:h-screen md:flex-col md:border-r md:bg-card transition-all duration-300 ${
           sidebarCollapsed ? "md:w-20" : "md:w-64"
@@ -54,6 +53,7 @@ export default function Home() {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
+          {/* Dashboard */}
           <button
             onClick={() => setActiveTab("dashboard")}
             className={`flex w-full items-center ${
@@ -70,6 +70,8 @@ export default function Home() {
               <span className="font-medium">Dashboard</span>
             )}
           </button>
+
+          {/* Lançamentos */}
           <button
             onClick={() => setActiveTab("lancamentos")}
             className={`flex w-full items-center ${
@@ -86,6 +88,24 @@ export default function Home() {
               <span className="font-medium">Lançamentos</span>
             )}
           </button>
+
+          {/* Planos (Receitas) - NOVO BOTÃO DESKTOP */}
+          <button
+            onClick={() => setActiveTab("receitas")}
+            className={`flex w-full items-center ${
+              sidebarCollapsed ? "justify-center" : "gap-3"
+            } rounded-lg px-4 py-3 text-left transition-all ${
+              activeTab === "receitas"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            }`}
+            title={sidebarCollapsed ? "Planos" : ""}
+          >
+            <PieChart className="h-5 w-5 shrink-0" />
+            {!sidebarCollapsed && <span className="font-medium">Planos</span>}
+          </button>
+
+          {/* Metas */}
           <button
             onClick={() => setActiveTab("metas")}
             className={`flex w-full items-center ${
@@ -100,6 +120,8 @@ export default function Home() {
             <Target className="h-5 w-5 shrink-0" />
             {!sidebarCollapsed && <span className="font-medium">Metas</span>}
           </button>
+
+          {/* Configurações */}
           <button
             onClick={() => setActiveTab("configuracoes")}
             className={`flex w-full items-center ${
@@ -119,38 +141,33 @@ export default function Home() {
         </nav>
       </aside>
 
-      {/* ÁREA PRINCIPAL */}
+      {/* --- ÁREA PRINCIPAL --- */}
       <main
         className={`min-h-screen transition-all duration-300 ${
           sidebarCollapsed ? "md:pl-20" : "md:pl-64"
         }`}
       >
-        {/* AQUI ESTÁ A ÚNICA MUDANÇA NECESSÁRIA: Passamos onNavigate para o Dashboard */}
         {activeTab === "dashboard" && <Dashboard onNavigate={setActiveTab} />}
-
         {activeTab === "lancamentos" && <Lancamentos />}
+        {activeTab === "receitas" && <Receitas />} {/* TELA NOVA */}
         {activeTab === "metas" && <Metas />}
-
-        {/* Passamos o onNavigate para permitir ir para Despesas Fixas */}
         {activeTab === "configuracoes" && (
           <Configuracoes onNavigate={setActiveTab} />
         )}
-
-        {/* NOVA TELA DE DESPESAS FIXAS */}
         {activeTab === "despesas_fixas" && (
           <DespesasFixas onBack={() => setActiveTab("configuracoes")} />
         )}
       </main>
 
-      {/* MENU MOBILE (Fixo embaixo) */}
+      {/* --- MENU MOBILE (Fixo embaixo) --- */}
       <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
-        <div className="bg-card border rounded-full px-3 py-2 flex items-center gap-2 shadow-xl backdrop-blur-sm bg-opacity-95">
-          {/* Botão Dashboard */}
+        <div className="bg-card border rounded-full px-3 py-2 flex items-center gap-1 shadow-xl backdrop-blur-sm bg-opacity-95">
+          {/* Home */}
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "dashboard"
-                ? "text-primary "
+                ? "text-primary bg-primary/10"
                 : "text-muted-foreground"
             }`}
           >
@@ -158,12 +175,12 @@ export default function Home() {
             <span className="text-[10px] mt-1 font-medium">Home</span>
           </button>
 
-          {/* Botão Lançamentos */}
+          {/* Lançamentos */}
           <button
             onClick={() => setActiveTab("lancamentos")}
-            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "lancamentos"
-                ? "text-primary "
+                ? "text-primary bg-primary/10"
                 : "text-muted-foreground"
             }`}
           >
@@ -171,12 +188,25 @@ export default function Home() {
             <span className="text-[10px] mt-1 font-medium">Lançam.</span>
           </button>
 
-          {/* Botão Configurações */}
+          {/* Planos (Receitas) - NOVO BOTÃO MOBILE */}
+          <button
+            onClick={() => setActiveTab("receitas")}
+            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+              activeTab === "receitas"
+                ? "text-primary bg-primary/10"
+                : "text-muted-foreground"
+            }`}
+          >
+            <PieChart className="h-5 w-5" />
+            <span className="text-[10px] mt-1 font-medium">Planos</span>
+          </button>
+
+          {/* Configurações */}
           <button
             onClick={() => setActiveTab("configuracoes")}
-            className={`w-16 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
               activeTab === "configuracoes" || activeTab === "despesas_fixas"
-                ? "text-primary "
+                ? "text-primary bg-primary/10"
                 : "text-muted-foreground"
             }`}
           >
