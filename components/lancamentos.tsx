@@ -23,7 +23,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Filter, Loader2, Search } from "lucide-react";
+import { Plus, Trash2, Filter, Loader2, Search } from "lucide-react"; // X removido
 import { useToast } from "@/hooks/use-toast";
 
 // NOVOS COMPONENTES
@@ -267,116 +267,155 @@ export default function Lancamentos() {
                 <Plus className="h-5 w-5" />
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
+
+            {/* MODAL BLINDADO (TELA CHEIA MOBILE) */}
+            <DialogContent
+              className="w-screen h-screen max-w-none rounded-none sm:rounded-lg sm:h-auto sm:max-w-lg flex flex-col p-0 gap-0"
+              onInteractOutside={(e) => e.preventDefault()}
+            >
+              {/* HEADER SIMPLES (O 'X' padrão do Dialog já aparecerá aqui no canto) */}
+              <DialogHeader className="p-6 pb-2 border-b">
                 <DialogTitle>
                   {editingId ? "Editar" : "Novo"} Lançamento
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4 pt-4">
-                <div className="space-y-2">
-                  <Label>Descrição</Label>
-                  <Input
-                    value={formData.descricao}
-                    onChange={(e) =>
-                      setFormData({ ...formData, descricao: e.target.value })
-                    }
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
+
+              {/* Área de Scroll para o Formulário */}
+              <div className="flex-1 overflow-y-auto p-6">
+                <form
+                  id="lancamento-form"
+                  onSubmit={handleSubmit}
+                  className="space-y-6"
+                >
                   <div className="space-y-2">
-                    <Label>Valor</Label>
+                    <Label>Descrição</Label>
                     <Input
-                      type="number"
-                      step="0.01"
-                      value={formData.valor || ""}
+                      value={formData.descricao}
                       onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          valor: Number(e.target.value),
-                        })
+                        setFormData({ ...formData, descricao: e.target.value })
                       }
                       required
+                      placeholder="Ex: Mercado, Salário..."
+                      className="text-lg py-6"
                     />
                   </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Valor</Label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                          R$
+                        </span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={formData.valor || ""}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              valor: Number(e.target.value),
+                            })
+                          }
+                          required
+                          className="pl-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Tipo</Label>
+                      <Select
+                        value={formData.tipo}
+                        onValueChange={(v: any) =>
+                          setFormData({ ...formData, tipo: v })
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Despesa">Despesa</SelectItem>
+                          <SelectItem value="Receita">Receita</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+
                   <div className="space-y-2">
-                    <Label>Tipo</Label>
+                    <Label>Categoria</Label>
                     <Select
-                      value={formData.tipo}
-                      onValueChange={(v: any) =>
-                        setFormData({ ...formData, tipo: v })
+                      value={formData.categoria}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, categoria: v })
                       }
                     >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Despesa">Despesa</SelectItem>
-                        <SelectItem value="Receita">Receita</SelectItem>
+                        {categoriasDB.map((c) => (
+                          <SelectItem key={c.id} value={c.nome}>
+                            {c.nome}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
-                </div>
-                {/* Outros campos do formulário continuam aqui (Categorias, Pagamento, Data)... */}
-                {/* Por brevidade no exemplo, mantive resumido, mas no seu código real mantenha os Selects de Categoria/Pagamento aqui */}
-                <div className="space-y-2">
-                  <Label>Categoria</Label>
-                  <Select
-                    value={formData.categoria}
-                    onValueChange={(v) =>
-                      setFormData({ ...formData, categoria: v })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {categoriasDB.map((c) => (
-                        <SelectItem key={c.id} value={c.nome}>
-                          {c.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Pagamento</Label>
-                  <Select
-                    value={formData.forma_pagamento}
-                    onValueChange={(v) =>
-                      setFormData({ ...formData, forma_pagamento: v })
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {formasPagamentoDB.map((f) => (
-                        <SelectItem key={f.id} value={f.nome}>
-                          {f.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Vencimento</Label>
-                  <Input
-                    type="date"
-                    value={formData.data_vencimento}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        data_vencimento: e.target.value,
-                      })
-                    }
-                  />
-                </div>
-                <Button type="submit" className="w-full">
+
+                  <div className="space-y-2">
+                    <Label>Pagamento</Label>
+                    <Select
+                      value={formData.forma_pagamento}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, forma_pagamento: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {formasPagamentoDB.map((f) => (
+                          <SelectItem key={f.id} value={f.nome}>
+                            {f.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Vencimento</Label>
+                    <Input
+                      type="date"
+                      value={formData.data_vencimento}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          data_vencimento: e.target.value,
+                        })
+                      }
+                    />
+                  </div>
+
+                  {/* Espaço extra no final */}
+                  <div className="h-4"></div>
+                </form>
+              </div>
+
+              {/* Rodapé Fixo */}
+              <div className="p-4 border-t bg-background/95 backdrop-blur z-10 flex gap-3">
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => setIsDialogOpen(false)}
+                  type="button"
+                >
+                  Cancelar
+                </Button>
+                <Button className="flex-1" type="submit" form="lancamento-form">
                   Salvar
                 </Button>
-              </form>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -474,9 +513,7 @@ export default function Lancamentos() {
               key={lancamento.id}
               lancamento={lancamento}
               isSelected={selectedIds.includes(lancamento.id)}
-              onSelect={() => {
-                /* Lógica movida para o handleSelectAll/Bulk, se quiser clique no card para selecionar, reative aqui */
-              }}
+              onSelect={() => {}}
               onTogglePago={() => togglePago(lancamento)}
               onEdit={() => handleEdit(lancamento)}
               onDelete={() => handleDelete(lancamento.id)}

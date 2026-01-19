@@ -164,3 +164,19 @@
 .slide-in-from-top-2 {
   animation: slide-in-from-top 0.3s ease-out;
 }
+/* app/globals.css */
+
+/* ... (mantenha o código que já existe acima) ... */
+
+@layer base {
+  /* Esconde a barra de rolagem para Chrome, Safari e Opera */
+  *::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* Esconde a barra de rolagem para IE, Edge e Firefox */
+  * {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+}
