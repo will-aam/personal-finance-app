@@ -78,7 +78,6 @@ export default function Lancamentos() {
     observacoes: "",
   });
 
-  // --- EFEITOS E BUSCAS ---
   useEffect(() => {
     if (date) {
       const ano = date.getFullYear();
