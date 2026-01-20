@@ -1,8 +1,9 @@
-// components/EditFixedExpenseDialog.tsx
+// app/components/EditFixedExpenseDialog.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import {
   Dialog,
   DialogContent,
@@ -38,6 +39,11 @@ export function EditFixedExpenseDialog({
   onSuccess,
 }: EditFixedExpenseDialogProps) {
   const { toast } = useToast();
+
+  // --- USER SESSION ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+
   const [loading, setLoading] = useState(false);
 
   // Estados locais para edição
@@ -55,6 +61,7 @@ export function EditFixedExpenseDialog({
   }, [expense]);
 
   const handleSave = async () => {
+    if (!userId) return; // Segurança básica
     if (!expense) return;
     if (!nome || !valor || !dia) {
       toast({
@@ -75,7 +82,8 @@ export function EditFixedExpenseDialog({
           valor: Number(valor),
           dia_vencimento: Number(dia),
         })
-        .eq("id", expense.id);
+        .eq("id", expense.id)
+        .eq("user_id", userId); // <--- SEGURANÇA: Só edita se for meu
 
       if (error) throw error;
 

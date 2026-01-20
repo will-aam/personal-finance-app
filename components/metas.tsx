@@ -1,7 +1,9 @@
+// app/components/metas.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import type { Meta } from "@/types";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -22,6 +24,10 @@ import {
 import { MetaFormSheet } from "@/components/target/MetaFormSheet";
 
 export default function Metas() {
+  // --- USER SESSION ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+
   const [metas, setMetas] = useState<Meta[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -31,6 +37,8 @@ export default function Metas() {
 
   // VERSÃO ROBUSTA DA FUNÇÃO DE PROCESSAMENTO
   const processarSimulacoes = async (metasCarregadas: Meta[]) => {
+    if (!userId) return metasCarregadas; // Segurança extra
+
     let houveAtualizacao = false;
     const agora = new Date(); // Data/Hora atual do seu PC
 
@@ -51,7 +59,7 @@ export default function Metas() {
         }
 
         console.log(
-          `Checando Meta: ${meta.nome} | Dia Cobrança: ${meta.auto_dia_cobranca}`
+          `Checando Meta: ${meta.nome} | Dia Cobrança: ${meta.auto_dia_cobranca}`,
         );
 
         // 2. CORREÇÃO DE FUSO HORÁRIO
@@ -83,7 +91,7 @@ export default function Metas() {
         const hojeMeiaNoite = new Date(
           agora.getFullYear(),
           agora.getMonth(),
-          agora.getDate()
+          agora.getDate(),
         );
 
         while (tempDate <= hojeMeiaNoite) {
@@ -109,7 +117,7 @@ export default function Metas() {
               const minAtual = agora.getMinutes();
 
               console.log(
-                `Verificando horário HOJE: Agendado ${meta.auto_horario} vs Atual ${horaAtual}:${minAtual}`
+                `Verificando horário HOJE: Agendado ${meta.auto_horario} vs Atual ${horaAtual}:${minAtual}`,
               );
 
               if (
@@ -126,7 +134,7 @@ export default function Metas() {
               console.log(
                 `>>> DEPÓSITO DETECTADO: R$ ${
                   meta.auto_valor
-                } em ${tempDate.toLocaleDateString()}`
+                } em ${tempDate.toLocaleDateString()}`,
               );
               valorAdicional += meta.auto_valor;
               // Formata YYYY-MM-DD localmente
@@ -152,7 +160,8 @@ export default function Metas() {
               valor_depositado: novoValorDepositado,
               auto_ultimo_processamento: novoUltimoProcessamento,
             })
-            .eq("id", meta.id);
+            .eq("id", meta.id)
+            .eq("user_id", userId); // <--- SEGURANÇA EXTRA NA ATUALIZAÇÃO
 
           if (error) console.error("Erro ao atualizar Supabase:", error);
 
@@ -164,14 +173,14 @@ export default function Metas() {
         }
 
         return meta;
-      })
+      }),
     );
 
     if (houveAtualizacao) {
       toast({
         title: "Simulação Processada",
         description: "Valores automáticos foram adicionados às suas metas.",
-        variant: "default", // ou "success" se tiver configurado
+        variant: "default",
       });
     }
 
@@ -179,16 +188,19 @@ export default function Metas() {
   };
 
   const fetchMetas = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from("metas")
         .select("*")
+        .eq("user_id", userId) // <--- SEGURANÇA: Só minhas metas
         .order("created_at", { ascending: false });
       if (error) throw error;
 
       const dadosProcessados = await processarSimulacoes(
-        data as unknown as Meta[]
+        data as unknown as Meta[],
       );
       setMetas(dadosProcessados);
     } catch (error: any) {
@@ -200,16 +212,23 @@ export default function Metas() {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, userId]);
 
   useEffect(() => {
-    fetchMetas();
-  }, [fetchMetas]);
+    if (userId) {
+      fetchMetas();
+    }
+  }, [fetchMetas, userId]);
 
   const handleDelete = async (id: number) => {
+    if (!userId) return;
     if (!confirm("Tem certeza?")) return;
     try {
-      const { error } = await supabase.from("metas").delete().eq("id", id);
+      const { error } = await supabase
+        .from("metas")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId); // <--- SEGURANÇA
       if (error) throw error;
       setMetas(metas.filter((m) => m.id !== id));
       toast({ title: "Meta removida" });
@@ -219,11 +238,23 @@ export default function Metas() {
   };
 
   const toggleFixarMeta = async (id: number) => {
+    if (!userId) return;
     try {
-      await supabase.from("metas").update({ fixada: false }).neq("id", 0);
+      // Primeiro desfixa todas DO USUÁRIO
+      await supabase
+        .from("metas")
+        .update({ fixada: false })
+        .neq("id", 0)
+        .eq("user_id", userId); // <--- SEGURANÇA
+
       const metaAtual = metas.find((m) => m.id === id);
       if (!metaAtual?.fixada) {
-        await supabase.from("metas").update({ fixada: true }).eq("id", id);
+        // Fixa a nova meta, garantindo que é do usuário
+        await supabase
+          .from("metas")
+          .update({ fixada: true })
+          .eq("id", id)
+          .eq("user_id", userId); // <--- SEGURANÇA
       }
       fetchMetas();
     } catch (error) {
@@ -344,7 +375,7 @@ export default function Metas() {
                     <span>
                       Meta para{" "}
                       {new Date(meta.data_conclusao).toLocaleDateString(
-                        "pt-BR"
+                        "pt-BR",
                       )}
                     </span>
                   </div>

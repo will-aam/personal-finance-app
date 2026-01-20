@@ -1,3 +1,4 @@
+// app/components/lancamentos/LancamentoItem.tsx
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";

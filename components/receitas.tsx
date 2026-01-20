@@ -1,7 +1,9 @@
+// app/components/receitas.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,7 +16,7 @@ import {
   TrendingUp,
   Wallet,
   Calculator,
-  Pencil, // Novo ícone
+  Pencil,
   X,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -31,15 +33,20 @@ interface ReceitaFixa {
 }
 
 export default function Receitas() {
+  const { toast } = useToast();
+
+  // --- USER SESSION ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+
   const [receitas, setReceitas] = useState<ReceitaFixa[]>([]);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
 
   // Estados para a "Calculadora"
   const [totalDespesasFixas, setTotalDespesasFixas] = useState(0);
   const [totalVariaveis, setTotalVariaveis] = useState(0);
 
-  // Controle de Data (Substituindo o input nativo)
+  // Controle de Data
   const [date, setDate] = useState<Date>(new Date());
   const [mesReferencia, setMesReferencia] = useState(
     new Date().toISOString().slice(0, 7),
@@ -47,13 +54,13 @@ export default function Receitas() {
 
   // Formulário de Nova/Edição Receita
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingId, setEditingId] = useState<number | null>(null); // ID sendo editado
+  const [editingId, setEditingId] = useState<number | null>(null);
 
   const [novoNome, setNovoNome] = useState("");
   const [novoValor, setNovoValor] = useState("");
   const [novoDia, setNovoDia] = useState("");
 
-  // Sincroniza a data do seletor bonito com a string de busca (YYYY-MM)
+  // Sincroniza a data do seletor
   useEffect(() => {
     if (date) {
       const ano = date.getFullYear();
@@ -64,32 +71,39 @@ export default function Receitas() {
 
   // 1. Carregar Receitas Fixas
   const fetchReceitas = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       const { data, error } = await supabase
         .from("receitas_fixas")
         .select("*")
+        .eq("user_id", userId) // <--- SEGURANÇA
         .order("valor", { ascending: false });
       if (error) throw error;
       setReceitas(data || []);
     } catch (error: any) {
       console.error("Erro ao carregar receitas", error);
     }
-  }, []);
+  }, [userId]);
 
   // 2. Carregar Totais para a Calculadora
   const fetchTotaisCalculadora = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       setLoading(true);
 
-      // A. Buscar Total de Despesas Fixas
+      // A. Buscar Total de Despesas Fixas DO USUÁRIO
       const { data: fixasData } = await supabase
         .from("despesas_fixas")
-        .select("valor");
+        .select("valor")
+        .eq("user_id", userId); // <--- SEGURANÇA
+
       const somaFixas =
         fixasData?.reduce((acc, item) => acc + Number(item.valor), 0) || 0;
       setTotalDespesasFixas(somaFixas);
 
-      // B. Buscar Despesas Variáveis do Mês Selecionado
+      // B. Buscar Despesas Variáveis DO USUÁRIO
       const [ano, mes] = mesReferencia.split("-");
       const inicio = `${mesReferencia}-01`;
       const fim = `${mesReferencia}-${new Date(Number(ano), Number(mes), 0).getDate()}`;
@@ -97,6 +111,7 @@ export default function Receitas() {
       const { data: variaveisData } = await supabase
         .from("lancamentos")
         .select("valor")
+        .eq("user_id", userId) // <--- SEGURANÇA
         .eq("tipo", "Despesa")
         .gte("data_vencimento", inicio)
         .lte("data_vencimento", fim);
@@ -109,12 +124,14 @@ export default function Receitas() {
     } finally {
       setLoading(false);
     }
-  }, [mesReferencia]);
+  }, [mesReferencia, userId]);
 
   useEffect(() => {
-    fetchReceitas();
-    fetchTotaisCalculadora();
-  }, [fetchReceitas, fetchTotaisCalculadora]);
+    if (userId) {
+      fetchReceitas();
+      fetchTotaisCalculadora();
+    }
+  }, [fetchReceitas, fetchTotaisCalculadora, userId]);
 
   // Limpar formulário
   const resetForm = () => {
@@ -136,6 +153,7 @@ export default function Receitas() {
 
   // Salvar (Criar ou Atualizar)
   const handleSave = async () => {
+    if (!userId) return;
     if (!novoNome || !novoValor) {
       toast({ title: "Preencha nome e valor", variant: "destructive" });
       return;
@@ -143,6 +161,7 @@ export default function Receitas() {
 
     try {
       const payload = {
+        user_id: userId, // <--- SEGURANÇA: Vincula ao usuário
         nome: novoNome,
         valor: Number(novoValor),
         dia_recebimento: novoDia ? Number(novoDia) : null,
@@ -153,7 +172,8 @@ export default function Receitas() {
         const { error } = await supabase
           .from("receitas_fixas")
           .update(payload)
-          .eq("id", editingId);
+          .eq("id", editingId)
+          .eq("user_id", userId); // <--- SEGURANÇA
         if (error) throw error;
         toast({ title: "Renda atualizada!" });
       } else {
@@ -177,9 +197,15 @@ export default function Receitas() {
   };
 
   const handleExcluir = async (id: number) => {
+    if (!userId) return;
     if (!confirm("Remover esta renda?")) return;
     try {
-      await supabase.from("receitas_fixas").delete().eq("id", id);
+      await supabase
+        .from("receitas_fixas")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId); // <--- SEGURANÇA
+
       setReceitas(receitas.filter((r) => r.id !== id));
       toast({ title: "Removido" });
     } catch (error) {
@@ -213,7 +239,7 @@ export default function Receitas() {
               Resumo
             </CardTitle>
 
-            {/* NOVO SELETOR DE MÊS (Substitui o Input nativo) */}
+            {/* SELETOR DE MÊS */}
             <div className="w-auto">
               <MonthSelector date={date} setDate={setDate} />
             </div>

@@ -2,12 +2,14 @@
 "use client";
 
 import { useState } from "react";
+import { authClient } from "@/lib/auth-client"; // <--- IMPORTANTE PARA O LOGOUT
+import { useRouter } from "next/navigation";
 import Dashboard from "@/components/dashboard";
 import Lancamentos from "@/components/lancamentos";
 import Metas from "@/components/metas";
 import Configuracoes from "@/components/configuracoes";
 import DespesasFixas from "@/components/despesas-fixas";
-import Receitas from "@/components/receitas"; // <--- NOVO IMPORT
+import Receitas from "@/components/receitas";
 import {
   LayoutDashboard,
   Receipt,
@@ -18,13 +20,28 @@ import {
   Home as HomeIcon,
   FileText,
   Cog,
-  PieChart, // <--- NOVO ÍCONE PARA "PLANOS"
+  PieChart,
+  LogOut, // <--- ÍCONE DE SAIR
+  User,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  const router = useRouter();
+  const session = authClient.useSession(); // <--- PEGA DADOS DO USUÁRIO
+
+  const handleLogout = async () => {
+    await authClient.signOut({
+      fetchOptions: {
+        onSuccess: () => {
+          router.push("/login"); // Manda pro login ao sair
+        },
+      },
+    });
+  };
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0 transition-all duration-300">
@@ -36,7 +53,9 @@ export default function Home() {
       >
         <div className="flex h-16 items-center justify-between border-b px-4">
           {!sidebarCollapsed && (
-            <h1 className="text-xl font-bold text-primary">My Pocket</h1>
+            <h1 className="text-xl font-bold text-primary truncate">
+              {session.data?.user.name || "My Pocket"}
+            </h1>
           )}
           <Button
             variant="ghost"
@@ -89,7 +108,7 @@ export default function Home() {
             )}
           </button>
 
-          {/* Planos (Receitas) - NOVO BOTÃO DESKTOP */}
+          {/* Planos (Receitas) */}
           <button
             onClick={() => setActiveTab("receitas")}
             className={`flex w-full items-center ${
@@ -139,6 +158,20 @@ export default function Home() {
             )}
           </button>
         </nav>
+
+        {/* --- RODAPÉ DA SIDEBAR (LOGOUT) --- */}
+        <div className="p-3 border-t">
+          <button
+            onClick={handleLogout}
+            className={`flex w-full items-center ${
+              sidebarCollapsed ? "justify-center" : "gap-3"
+            } rounded-lg px-4 py-3 text-left text-red-500 hover:bg-red-50 transition-all`}
+            title={sidebarCollapsed ? "Sair" : ""}
+          >
+            <LogOut className="h-5 w-5 shrink-0" />
+            {!sidebarCollapsed && <span className="font-medium">Sair</span>}
+          </button>
+        </div>
       </aside>
 
       {/* --- ÁREA PRINCIPAL --- */}
@@ -149,7 +182,7 @@ export default function Home() {
       >
         {activeTab === "dashboard" && <Dashboard onNavigate={setActiveTab} />}
         {activeTab === "lancamentos" && <Lancamentos />}
-        {activeTab === "receitas" && <Receitas />} {/* TELA NOVA */}
+        {activeTab === "receitas" && <Receitas />}
         {activeTab === "metas" && <Metas />}
         {activeTab === "configuracoes" && (
           <Configuracoes onNavigate={setActiveTab} />
@@ -160,12 +193,12 @@ export default function Home() {
       </main>
 
       {/* --- MENU MOBILE (Fixo embaixo) --- */}
-      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden">
-        <div className="bg-card border rounded-full px-3 py-2 flex items-center gap-1 shadow-xl backdrop-blur-sm bg-opacity-95">
+      <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 md:hidden w-[95%] max-w-sm">
+        <div className="bg-card border rounded-2xl px-2 py-2 flex items-center justify-between shadow-xl backdrop-blur-sm bg-opacity-95">
           {/* Home */}
           <button
             onClick={() => setActiveTab("dashboard")}
-            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`flex-1 h-14 flex flex-col items-center justify-center rounded-xl transition-all ${
               activeTab === "dashboard"
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground"
@@ -178,20 +211,20 @@ export default function Home() {
           {/* Lançamentos */}
           <button
             onClick={() => setActiveTab("lancamentos")}
-            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`flex-1 h-14 flex flex-col items-center justify-center rounded-xl transition-all ${
               activeTab === "lancamentos"
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground"
             }`}
           >
             <FileText className="h-5 w-5" />
-            <span className="text-[10px] mt-1 font-medium">Lançam.</span>
+            <span className="text-[10px] mt-1 font-medium">Lanç.</span>
           </button>
 
-          {/* Planos (Receitas) - NOVO BOTÃO MOBILE */}
+          {/* Planos */}
           <button
             onClick={() => setActiveTab("receitas")}
-            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`flex-1 h-14 flex flex-col items-center justify-center rounded-xl transition-all ${
               activeTab === "receitas"
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground"
@@ -201,10 +234,10 @@ export default function Home() {
             <span className="text-[10px] mt-1 font-medium">Planos</span>
           </button>
 
-          {/* Configurações */}
+          {/* Config (com opção de sair dentro dela ou um long press futuramente, mas por enquanto mantemos simples) */}
           <button
             onClick={() => setActiveTab("configuracoes")}
-            className={`w-14 h-14 flex flex-col items-center justify-center rounded-2xl transition-all ${
+            className={`flex-1 h-14 flex flex-col items-center justify-center rounded-xl transition-all ${
               activeTab === "configuracoes" || activeTab === "despesas_fixas"
                 ? "text-primary bg-primary/10"
                 : "text-muted-foreground"

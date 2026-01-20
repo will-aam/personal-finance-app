@@ -1,15 +1,16 @@
-// components/despesas-fixas.tsx
+// app/components/despesas-fixas.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { EditFixedExpenseDialog } from "@/components/EditFixedExpenseDialog"; // <--- Importação nova
+import { EditFixedExpenseDialog } from "@/components/EditFixedExpenseDialog";
 import {
   Plus,
   Trash2,
@@ -19,7 +20,7 @@ import {
   Wallet,
   X,
   Calendar,
-  Pencil, // <--- Ícone novo
+  Pencil,
 } from "lucide-react";
 
 interface DespesasFixasProps {
@@ -34,6 +35,12 @@ interface DespesaFixa {
 }
 
 export default function DespesasFixas({ onBack }: DespesasFixasProps) {
+  const { toast } = useToast();
+
+  // --- USER SESSION ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+
   const [items, setItems] = useState<DespesaFixa[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,8 +56,6 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
   // Estado para Edição
   const [editingItem, setEditingItem] = useState<DespesaFixa | null>(null);
 
-  const { toast } = useToast();
-
   useEffect(() => {
     const salvo = localStorage.getItem("modoQuinzenalFinanceApp");
     if (salvo === "true") {
@@ -64,11 +69,14 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
   };
 
   const fetchDespesas = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       setLoading(true);
       const { data, error } = await supabase
         .from("despesas_fixas")
         .select("*")
+        .eq("user_id", userId) // <--- SEGURANÇA
         .order("dia_vencimento", { ascending: true });
 
       if (error) throw error;
@@ -78,18 +86,22 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, userId]);
 
   useEffect(() => {
-    fetchDespesas();
-  }, [fetchDespesas]);
+    if (userId) {
+      fetchDespesas();
+    }
+  }, [fetchDespesas, userId]);
 
   const handleAdicionar = async () => {
+    if (!userId) return;
     if (!novoNome || !novoValor || !novoDia) return;
 
     try {
       const { error } = await supabase.from("despesas_fixas").insert([
         {
+          user_id: userId, // <--- SEGURANÇA: Cria com dono
           nome: novoNome,
           valor: Number(novoValor),
           dia_vencimento: Number(novoDia),
@@ -114,12 +126,15 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
   };
 
   const handleExcluir = async (id: number) => {
+    if (!userId) return;
     if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
     try {
       const { error } = await supabase
         .from("despesas_fixas")
         .delete()
-        .eq("id", id);
+        .eq("id", id)
+        .eq("user_id", userId); // <--- SEGURANÇA: Só apaga se for meu
+
       if (error) throw error;
 
       setItems(items.filter((item) => item.id !== id));
@@ -135,11 +150,11 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
   const itemsDia15 = items.filter((item) => item.dia_vencimento >= 15);
   const totalPagamentoDia05 = itemsDia05.reduce(
     (acc, item) => acc + item.valor,
-    0
+    0,
   );
   const totalPagamentoDia15 = itemsDia15.reduce(
     (acc, item) => acc + item.valor,
-    0
+    0,
   );
 
   const formatMoney = (val: number) =>

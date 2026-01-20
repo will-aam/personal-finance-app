@@ -4,6 +4,7 @@
 import type React from "react";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import type { Meta } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,8 +34,13 @@ export function MetaFormSheet({
   onSuccess,
 }: MetaFormSheetProps) {
   const { toast } = useToast();
+
+  // --- USER SESSION ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+
   const [editingId, setEditingId] = useState<number | null>(
-    metaToEdit?.id || null
+    metaToEdit?.id || null,
   );
 
   const [parcelamentoConfig, setParcelamentoConfig] = useState({
@@ -52,7 +58,6 @@ export function MetaFormSheet({
     valor_depositado: metaToEdit?.valor_depositado || 0,
     data_inicio:
       metaToEdit?.data_inicio || new Date().toISOString().split("T")[0],
-    // Removemos data_conclusao do padrão visual, mas mantemos no state se precisar
     tipo: metaToEdit?.tipo || "vista",
     fixada: metaToEdit?.fixada || false,
 
@@ -61,7 +66,6 @@ export function MetaFormSheet({
     auto_valor: metaToEdit?.auto_valor || 0,
     auto_dia_cobranca: metaToEdit?.auto_dia_cobranca || 15,
     auto_horario: metaToEdit?.auto_horario || "12:00",
-    // auto_data_inicio agora será sincronizado com data_inicio
     auto_meses_duracao: metaToEdit?.auto_meses_duracao || 0,
   });
 
@@ -84,9 +88,6 @@ export function MetaFormSheet({
         auto_valor: Number(parcelamentoConfig.valorParcela),
         auto_meses_duracao: Number(parcelamentoConfig.totalParcelas),
       }));
-    } else if (formData.tipo === "vista") {
-      // Se mudar para 'vista', não zera tudo agressivamente, mas permite edição manual
-      // Mantemos o valor atual, o usuário edita se quiser
     }
   }, [
     formData.tipo,
@@ -96,15 +97,26 @@ export function MetaFormSheet({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!userId) {
+      toast({
+        title: "Erro",
+        description: "Usuário não autenticado.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     try {
       const payload = {
+        user_id: userId, // <--- O PULO DO GATO: Vincula a meta a você!
         nome: formData.nome,
         link: formData.link || null,
         descricao: formData.descricao,
         valor_total: formData.valor_total,
         valor_depositado: formData.valor_depositado || 0,
         data_inicio: formData.data_inicio || null,
-        data_conclusao: null, // Ignoramos data desejada
+        data_conclusao: null,
         tipo: formData.tipo,
         fixada: formData.fixada,
 
@@ -119,7 +131,7 @@ export function MetaFormSheet({
         auto_dia_cobranca: formData.auto_dia_cobranca,
         auto_horario: formData.auto_horario || "00:00",
 
-        // AQUI ESTÁ A MÁGICA: A data de início da automação é a mesma da meta
+        // A data de início da automação é a mesma da meta
         auto_data_inicio: formData.data_inicio,
 
         // Se for parcelado, duração é fixa. Se for à vista, usa o manual
@@ -135,7 +147,8 @@ export function MetaFormSheet({
         const { error } = await supabase
           .from("metas")
           .update(payload)
-          .eq("id", editingId);
+          .eq("id", editingId)
+          .eq("user_id", userId); // <--- SEGURANÇA NA EDIÇÃO
         if (error) throw error;
         toast({ title: "Meta atualizada!" });
       } else {
@@ -157,7 +170,7 @@ export function MetaFormSheet({
 
   const handleParcelamentoChange = (
     field: "totalParcelas" | "valorParcela",
-    value: string
+    value: string,
   ) => {
     const newConfig = { ...parcelamentoConfig, [field]: value };
     setParcelamentoConfig(newConfig);
@@ -214,7 +227,7 @@ export function MetaFormSheet({
               />
             </div>
 
-            {/* BLOCO 2: Tipo de Meta (Agora vem ANTES dos valores) */}
+            {/* BLOCO 2: Tipo de Meta */}
             <div className="space-y-2 pt-2">
               <Label>Tipo de Planejamento</Label>
               <Tabs
@@ -233,9 +246,9 @@ export function MetaFormSheet({
               </Tabs>
             </div>
 
-            {/* BLOCO 3: Valores (Muda conforme o tipo) */}
+            {/* BLOCO 3: Valores */}
             {formData.tipo === "parcelado" ? (
-              // MODO PARCELADO: Inputs de parcelas
+              // MODO PARCELADO
               <div className="rounded-lg border p-4 bg-accent/30 animate-in fade-in slide-in-from-top-2">
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -249,7 +262,7 @@ export function MetaFormSheet({
                       onChange={(e) =>
                         handleParcelamentoChange(
                           "totalParcelas",
-                          e.target.value
+                          e.target.value,
                         )
                       }
                     />
@@ -280,7 +293,7 @@ export function MetaFormSheet({
                 </div>
               </div>
             ) : (
-              // MODO À VISTA: Input de Valor Total normal
+              // MODO À VISTA
               <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
                 <Label htmlFor="valorTotal">Valor Total da Meta (R$)</Label>
                 <Input
@@ -336,7 +349,7 @@ export function MetaFormSheet({
               </div>
             </div>
 
-            {/* BLOCO 5: Automação (Simplificada) */}
+            {/* BLOCO 5: Automação */}
             <div className="space-y-4 rounded-lg border p-4 bg-muted/30">
               <div className="flex items-center justify-between">
                 <div className="space-y-0.5">
@@ -352,13 +365,12 @@ export function MetaFormSheet({
                   onCheckedChange={(checked) =>
                     setFormData({ ...formData, auto_deposito_ativo: checked })
                   }
-                  // Se for parcelado, forçamos ficar ativo, ou deixamos opcional mas já vem marcado
                 />
               </div>
 
               {formData.auto_deposito_ativo && (
                 <div className="grid gap-4 md:grid-cols-2 pt-2 animate-in fade-in">
-                  {/* Se for Parcelado, escondemos o valor (pois já foi definido nas parcelas) */}
+                  {/* Se for Parcelado, escondemos o valor */}
                   {formData.tipo === "vista" && (
                     <div className="space-y-2">
                       <Label htmlFor="autoValor">Valor Mensal (R$)</Label>
@@ -410,7 +422,6 @@ export function MetaFormSheet({
                     />
                   </div>
 
-                  {/* Se for Parcelado, escondemos a duração (pois é igual ao num de parcelas) */}
                   {formData.tipo === "vista" && (
                     <div className="space-y-2">
                       <Label htmlFor="autoMeses">Duração (Meses)</Label>

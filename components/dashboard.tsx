@@ -3,6 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -27,6 +28,11 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ onNavigate }: DashboardProps) {
+  // --- USER SESSION ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+  console.log("MEU ID ATUAL (Copie isso):", userId);
+
   // --- ESTADOS DO FILTRO ---
   const [mesSelecionado, setMesSelecionado] = useState("todos");
   const [mesesDisponiveis, setMesesDisponiveis] = useState<string[]>([]);
@@ -53,11 +59,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   };
 
   // 2. Buscar meses disponíveis no banco
-  const fetchMeses = async () => {
+  const fetchMeses = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       const { data, error } = await supabase
         .from("lancamentos")
         .select("data_vencimento")
+        .eq("user_id", userId) // <--- SEGURANÇA
         .order("data_vencimento", { ascending: false });
 
       if (error) throw error;
@@ -71,19 +80,25 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         });
         setMesesDisponiveis(Array.from(mesesSet));
       }
-    } catch (error) {
-      console.error("Erro ao carregar meses:", error);
+    } catch (error: any) {
+      // MUDANÇA AQUI: Vamos logar o erro completo e stringificado
+      console.error("ERRO DETALHADO:", JSON.stringify(error, null, 2));
+      console.error("Mensagem:", error.message);
+      console.error("Detalhes:", error.details);
+      console.error("Hint:", error.hint);
     }
-  };
+  }, [userId]);
 
   // 3. Inicialização e Persistência do Filtro
   useEffect(() => {
-    fetchMeses();
+    if (userId) {
+      fetchMeses();
+    }
     const filtroSalvo = localStorage.getItem("dashboardFiltroMes");
     if (filtroSalvo) {
       setMesSelecionado(filtroSalvo);
     }
-  }, []);
+  }, [userId, fetchMeses]);
 
   const handleFiltroChange = (valor: string) => {
     setMesSelecionado(valor);
@@ -92,19 +107,23 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   // 4. Buscar Dados do Dashboard
   const fetchDashboardData = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       setLoading(true);
 
       // --- Query Base de Despesas ---
       let queryDespesas = supabase
         .from("lancamentos")
-        .select("*") // Precisamos de tudo (*) para categorizar
+        .select("*")
+        .eq("user_id", userId) // <--- SEGURANÇA
         .eq("tipo", "Despesa");
 
       // --- Query Base de Vencimentos ---
       let queryVencimentos = supabase
         .from("lancamentos")
         .select("*")
+        .eq("user_id", userId) // <--- SEGURANÇA
         .eq("pago", false)
         .eq("tipo", "Despesa")
         .order("data_vencimento", { ascending: true })
@@ -136,7 +155,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         0;
       setTotalDespesas(total);
 
-      // B) Cálculo das Categorias (As "Barrinhas") - REINSERIDO
+      // B) Cálculo das Categorias (As "Barrinhas")
       const categoriasMap = lancamentosData?.reduce((acc: any, curr) => {
         acc[curr.categoria] = (acc[curr.categoria] || 0) + Number(curr.valor);
         return acc;
@@ -155,17 +174,20 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       // D) Despesas Fixas (Total Geral)
       const { data: fixasData } = await supabase
         .from("despesas_fixas")
-        .select("valor");
+        .select("valor")
+        .eq("user_id", userId); // <--- SEGURANÇA
+
       const totalFixas =
         fixasData?.reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
       setTotalDespesasFixas(totalFixas);
 
-      // E) Meta Fixada - CORRIGIDO (Usando "fixada" em vez de "fixada_dashboard")
+      // E) Meta Fixada
       const { data: metaData } = await supabase
         .from("metas")
         .select("*")
-        .eq("fixada", true) // Voltamos para a coluna correta
-        .single();
+        .eq("user_id", userId) // <--- SEGURANÇA
+        .eq("fixada", true)
+        .maybeSingle();
 
       if (metaData) {
         setMetaFixada(metaData);
@@ -187,11 +209,13 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     } finally {
       setLoading(false);
     }
-  }, [mesSelecionado]);
+  }, [mesSelecionado, userId]);
 
   useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+    if (userId) {
+      fetchDashboardData();
+    }
+  }, [fetchDashboardData, userId]);
 
   const formatMoney = (val: number) =>
     val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -226,7 +250,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                   {formatarMesLegivel(mes)}
                 </SelectItem>
               ))}
-              {/* Se a lista estiver vazia (sem lançamentos), mostra a opção atual para não quebrar */}
               {mesesDisponiveis.length === 0 && mesSelecionado !== "todos" && (
                 <SelectItem value={mesSelecionado}>
                   {formatarMesLegivel(mesSelecionado)}
@@ -282,7 +305,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         </Card>
       </div>
 
-      {/* META FIXADA (Restaurada) */}
+      {/* META FIXADA */}
       {metaFixada && (
         <Card className="border-l-4 border-l-primary shadow-sm bg-card/50 backdrop-blur-sm">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -302,16 +325,18 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 <span>
                   {formatMoney(
                     Number(
-                      metaFixada.valor_atual || metaFixada.valor_depositado || 0
-                    )
+                      metaFixada.valor_atual ||
+                        metaFixada.valor_depositado ||
+                        0,
+                    ),
                   )}
                 </span>
                 <span>
                   de{" "}
                   {formatMoney(
                     Number(
-                      metaFixada.valor_objetivo || metaFixada.valor_total || 0
-                    )
+                      metaFixada.valor_objetivo || metaFixada.valor_total || 0,
+                    ),
                   )}
                 </span>
               </div>
@@ -322,7 +347,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* GRÁFICO (BARRINHAS) + VENCIMENTOS */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Gráfico de Barras - "Onde estou gastando?" (RESTAURADO) */}
+        {/* Gráfico de Barras - "Onde estou gastando?" */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -375,7 +400,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                 proximosVencimentos.map((item) => {
                   const dataVenc = new Date(item.data_vencimento);
                   dataVenc.setMinutes(
-                    dataVenc.getMinutes() + dataVenc.getTimezoneOffset()
+                    dataVenc.getMinutes() + dataVenc.getTimezoneOffset(),
                   );
 
                   const hoje = new Date();

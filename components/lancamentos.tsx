@@ -3,6 +3,7 @@
 import type React from "react";
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
+import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
 import type { Lancamento } from "@/types";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Trash2, Filter, Loader2, Search } from "lucide-react"; // X removido
+import { Plus, Trash2, Filter, Loader2, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 // NOVOS COMPONENTES
@@ -38,6 +39,10 @@ export default function Lancamentos() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const { toast } = useToast();
 
+  // --- NOVO: ID DO USUÁRIO ---
+  const session = authClient.useSession();
+  const userId = session.data?.user.id;
+
   // Seleção e Opções
   const [selectedIds, setSelectedIds] = useState<number[]>([]);
   const [categoriasDB, setCategoriasDB] = useState<
@@ -46,7 +51,7 @@ export default function Lancamentos() {
   const [formasPagamentoDB, setFormasPagamentoDB] = useState<
     { id: number; nome: string }[]
   >([]);
-  const [loadingOptions, setLoadingOptions] = useState(true);
+  // const [loadingOptions, setLoadingOptions] = useState(true); // Removido pois não estava sendo usado visualmente
 
   // Filtros
   const [searchQuery, setSearchQuery] = useState("");
@@ -83,24 +88,30 @@ export default function Lancamentos() {
   }, [date]);
 
   const fetchOpcoes = useCallback(async () => {
+    // NÃO FILTRA MAIS POR user_id AQUI
     try {
-      setLoadingOptions(true);
+      // setLoadingOptions(true);
       const { data: cat } = await supabase
         .from("categorias")
         .select("*")
+        // .eq("user_id", userId) // <--- REMOVIDO PARA SER GLOBAL
         .order("nome");
       if (cat) setCategoriasDB(cat);
+
       const { data: pay } = await supabase
         .from("formas_pagamento")
         .select("*")
+        // .eq("user_id", userId) // <--- REMOVIDO PARA SER GLOBAL
         .order("nome");
       if (pay) setFormasPagamentoDB(pay);
     } finally {
-      setLoadingOptions(false);
+      // setLoadingOptions(false);
     }
-  }, []);
+  }, []); // Sem dependência de userId
 
   const fetchLancamentos = useCallback(async () => {
+    if (!userId) return; // Só busca se tiver usuário
+
     try {
       setLoading(true);
       setSelectedIds([]);
@@ -111,6 +122,7 @@ export default function Lancamentos() {
       const { data, error } = await supabase
         .from("lancamentos")
         .select("*")
+        .eq("user_id", userId) // <--- SEGURANÇA: Só traz dados desse usuário
         .gte("data_vencimento", dataInicio)
         .lte("data_vencimento", dataFim)
         .order("data_vencimento", { ascending: true });
@@ -126,12 +138,14 @@ export default function Lancamentos() {
     } finally {
       setLoading(false);
     }
-  }, [filtroMes, toast]);
+  }, [filtroMes, toast, userId]);
 
   useEffect(() => {
-    fetchLancamentos();
-    fetchOpcoes();
-  }, [fetchLancamentos, fetchOpcoes]);
+    if (userId) {
+      fetchLancamentos();
+      fetchOpcoes();
+    }
+  }, [fetchLancamentos, fetchOpcoes, userId]);
 
   // --- LÓGICA DE FILTRO ---
   const lancamentosFiltrados = lancamentos.filter((l) => {
@@ -172,7 +186,11 @@ export default function Lancamentos() {
     if (selectedIds.length === 0 || !confirm("Excluir itens selecionados?"))
       return;
     try {
-      await supabase.from("lancamentos").delete().in("id", selectedIds);
+      await supabase
+        .from("lancamentos")
+        .delete()
+        .in("id", selectedIds)
+        .eq("user_id", userId); // <--- SEGURANÇA: Garante que só apaga se for meu
       toast({ title: `${selectedIds.length} excluídos.` });
       setLancamentos((prev) => prev.filter((l) => !selectedIds.includes(l.id)));
       setSelectedIds([]);
@@ -183,12 +201,20 @@ export default function Lancamentos() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!userId) return;
+
     try {
       if (editingId) {
-        await supabase.from("lancamentos").update(formData).eq("id", editingId);
+        await supabase
+          .from("lancamentos")
+          .update(formData)
+          .eq("id", editingId)
+          .eq("user_id", userId); // <--- SEGURANÇA
         toast({ title: "Atualizado!" });
       } else {
-        await supabase.from("lancamentos").insert([formData]);
+        await supabase
+          .from("lancamentos")
+          .insert([{ ...formData, user_id: userId }]); // <--- SEGURANÇA: Cria com meu ID
         toast({ title: "Criado!" });
       }
       resetForm();
@@ -205,7 +231,11 @@ export default function Lancamentos() {
   const handleDelete = async (id: number) => {
     if (!confirm("Excluir este lançamento?")) return;
     try {
-      await supabase.from("lancamentos").delete().eq("id", id);
+      await supabase
+        .from("lancamentos")
+        .delete()
+        .eq("id", id)
+        .eq("user_id", userId); // <--- SEGURANÇA
       setLancamentos((prev) => prev.filter((l) => l.id !== id));
       toast({ title: "Excluído com sucesso" });
     } catch {
@@ -224,7 +254,8 @@ export default function Lancamentos() {
       await supabase
         .from("lancamentos")
         .update({ pago: novoStatus })
-        .eq("id", lancamento.id);
+        .eq("id", lancamento.id)
+        .eq("user_id", userId); // <--- SEGURANÇA
     } catch {
       toast({ title: "Erro ao atualizar", variant: "destructive" });
     }
@@ -273,7 +304,7 @@ export default function Lancamentos() {
               className="w-screen h-screen max-w-none rounded-none sm:rounded-lg sm:h-auto sm:max-w-lg flex flex-col p-0 gap-0"
               onInteractOutside={(e) => e.preventDefault()}
             >
-              {/* HEADER SIMPLES (O 'X' padrão do Dialog já aparecerá aqui no canto) */}
+              {/* HEADER SIMPLES */}
               <DialogHeader className="p-6 pb-2 border-b">
                 <DialogTitle>
                   {editingId ? "Editar" : "Novo"} Lançamento
@@ -397,7 +428,6 @@ export default function Lancamentos() {
                     />
                   </div>
 
-                  {/* Espaço extra no final */}
                   <div className="h-4"></div>
                 </form>
               </div>
@@ -513,7 +543,16 @@ export default function Lancamentos() {
               key={lancamento.id}
               lancamento={lancamento}
               isSelected={selectedIds.includes(lancamento.id)}
-              onSelect={() => {}}
+              onSelect={() => {
+                // Lógica de seleção individual manual
+                if (selectedIds.includes(lancamento.id)) {
+                  setSelectedIds((prev) =>
+                    prev.filter((id) => id !== lancamento.id),
+                  );
+                } else {
+                  setSelectedIds((prev) => [...prev, lancamento.id]);
+                }
+              }}
               onTogglePago={() => togglePago(lancamento)}
               onEdit={() => handleEdit(lancamento)}
               onDelete={() => handleDelete(lancamento.id)}

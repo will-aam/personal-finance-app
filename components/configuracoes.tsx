@@ -1,8 +1,10 @@
+// app/components/configuracoes.tsx
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Tag, CreditCard, Calendar, Target } from "lucide-react";
 import { supabase } from "@/lib/supabase";
+// import { authClient } from "@/lib/auth-client"; // Removido, pois é global agora
 import { QuickActionCard } from "@/components/config/QuickActionCard";
 import { ThemeToggleCard } from "@/components/config/ThemeToggleCard";
 import { ListManagerCard, ListItem } from "@/components/config/ListManagerCard";
@@ -14,35 +16,37 @@ interface ConfiguracoesProps {
 
 export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
   const { toast } = useToast();
+
   // Iniciamos com arrays vazios para evitar undefined
   const [categorias, setCategorias] = useState<ListItem[]>([]);
   const [formasPagamento, setFormasPagamento] = useState<ListItem[]>([]);
 
-  const fetchData = async () => {
-    // Busca simples sem filtro de usuário
+  const fetchData = useCallback(async () => {
+    // Busca GLOBAL (sem filtro de user_id)
     const { data: catData } = await supabase
       .from("categorias")
       .select("*")
       .order("nome");
     if (catData) setCategorias(catData);
 
+    // Busca GLOBAL (sem filtro de user_id)
     const { data: payData } = await supabase
       .from("formas_pagamento")
       .select("*")
       .order("nome");
     if (payData) setFormasPagamento(payData);
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleAdd = async (
     table: "categorias" | "formas_pagamento",
-    nome: string
+    nome: string,
   ) => {
-    // Insert simples sem user_id
-    const { error } = await supabase.from(table).insert([{ nome }]);
+    // Insert GLOBAL (sem user_id, visível para todos)
+    const { error } = await supabase.from(table).insert([{ nome }]); // <--- GLOBAL
 
     if (error) {
       toast({
@@ -53,14 +57,16 @@ export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
       throw error;
     }
     fetchData();
-    toast({ title: "Adicionado com sucesso!" });
+    toast({ title: "Adicionado (Global)!" });
   };
 
   const handleRemove = async (
     table: "categorias" | "formas_pagamento",
-    id: number
+    id: number,
   ) => {
+    // Delete GLOBAL (Cuidado: qualquer um apaga de qualquer um)
     const { error } = await supabase.from(table).delete().eq("id", id);
+
     if (error) {
       toast({ title: "Erro ao remover", variant: "destructive" });
       throw error;
@@ -90,19 +96,19 @@ export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
       </div>
 
       <ListManagerCard
-        title="Categorias"
+        title="Categorias (Global)"
         icon={Tag}
-        items={categorias} // Passamos o estado, que começa como []
-        placeholderInput="Nova categoria"
+        items={categorias}
+        placeholderInput="Nova categoria global"
         onAdd={(nome) => handleAdd("categorias", nome)}
         onRemove={(id) => handleRemove("categorias", id)}
       />
 
       <ListManagerCard
-        title="Formas de Pagamento"
+        title="Formas de Pagamento (Global)"
         icon={CreditCard}
         items={formasPagamento}
-        placeholderInput="Nova forma"
+        placeholderInput="Nova forma global"
         onAdd={(nome) => handleAdd("formas_pagamento", nome)}
         onRemove={(id) => handleRemove("formas_pagamento", id)}
       />
