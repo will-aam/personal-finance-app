@@ -16,4 +16,10 @@ export const auth = betterAuth({
       clientSecret: process.env.GOOGLE_CLIENT_SECRET as string,
     },
   },
+  // 👇 AQUI ESTÁ A CORREÇÃO DO LOOP INFINITO 👇
+  trustedOrigins: [
+    "https://fincappw.vercel.app", // Seu site em produção
+    "http://localhost:3000", // Seu localhost
+  ],
+  baseURL: "https://fincappw.vercel.app", // Forçando a URL correta
 });
