@@ -1,19 +1,18 @@
 import withPWAInit from "@ducanh2912/next-pwa";
 
 const withPWA = withPWAInit({
-  dest: "public", // Pasta onde o service worker será criado
+  dest: "public",
   cacheOnFrontEndNav: true,
   aggressiveFrontEndNavCaching: true,
   reloadOnOnline: true,
   swcMinify: true,
-  disable: false, // Deixe false para testar (ou process.env.NODE_ENV === "development" para desativar local)
+  disable: false,
   workboxOptions: {
     disableDevLogs: true,
   },
 });
 
 /** @type {import('next').NextConfig} */
-
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
@@ -23,4 +22,7 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+// 👇 AQUI ESTAVA O ERRO!
+// Antes estava: export default nextConfig;
+// AGORA TEM QUE SER ASSIM:
+export default withPWA(nextConfig);

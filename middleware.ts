@@ -26,7 +26,11 @@ export async function middleware(request: NextRequest) {
   return NextResponse.next();
 }
 
-// Configuração para ignorar API e arquivos estáticos
+// middleware.ts (apenas a parte do config no final)
+
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  // ADICIONEI: sw.js, manifest.json, workbox-.* e extensões de imagem
+  matcher: [
+    "/((?!api|_next/static|_next/image|favicon.ico|sw.js|manifest.json|workbox-.*|.*\\.png|.*\\.jpg).*)",
+  ],
 };
