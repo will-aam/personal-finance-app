@@ -2,8 +2,8 @@
 import type React from "react";
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Analytics } from "@vercel/analytics/next";
-import { ThemeProvider } from "next-themes"; // <--- 1. IMPORTANTE: Importe o ThemeProvider
+import { Analytics } from "@vercel/analytics/react";
+import { ThemeProvider } from "next-themes";
 import "./globals.css";
 
 // Configurei as variáveis para o Tailwind reconhecer as fontes corretamente
@@ -31,8 +31,7 @@ export const metadata: Metadata = {
 
   // Apontando para o arquivo manifest que você já tem na pasta public
   // Isso é OBRIGATÓRIO para aparecer o botão de instalar no Android/Chrome
-  manifest: "/site.webmanifest",
-
+  manifest: "/manifest.json",
   // Mapeando os ícones que aparecem na sua imagem
   icons: {
     icon: [

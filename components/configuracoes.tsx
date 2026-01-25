@@ -4,7 +4,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Tag, CreditCard, Calendar, Target } from "lucide-react";
 import { supabase } from "@/lib/supabase";
-// import { authClient } from "@/lib/auth-client"; // Removido, pois é global agora
+import { InstallButton } from "@/components/ui/install-button";
 import { QuickActionCard } from "@/components/config/QuickActionCard";
 import { ThemeToggleCard } from "@/components/config/ThemeToggleCard";
 import { ListManagerCard, ListItem } from "@/components/config/ListManagerCard";
@@ -77,8 +77,9 @@ export default function Configuracoes({ onNavigate }: ConfiguracoesProps) {
 
   return (
     <div className="p-4 space-y-4 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4">
-      <div className="pb-2">
+      <div className="pb-2 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Configurações</h1>
+        <InstallButton />
       </div>
 
       <div className="grid grid-cols-3 gap-3">
