@@ -1,19 +1,19 @@
+// types/index.ts
 export type TipoLancamento = "Receita" | "Despesa";
 
 export interface Lancamento {
-  id: number; // Vamos manter number por enquanto para compatibilidade, mas no futuro mudaremos para string (UUID)
+  id: number;
   user_id?: string;
   descricao: string;
   link?: string;
   categoria: string;
   tipo: TipoLancamento;
   valor: number;
-  forma_pagamento: string; // Mudamos de formaPagamento para snake_case (padrão banco de dados)
-  data_vencimento: string; // Mudamos de diaVencimento (number) para data completa (string ISO)
+  forma_pagamento: string;
+  data_vencimento: string;
   pago: boolean;
   observacoes?: string;
   created_at?: string;
-  // Os campos de automação foram removidos daqui, pois pertencem à interface Meta
 }
 
 export interface Meta {

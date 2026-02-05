@@ -1,3 +1,4 @@
+// compnents/lancamentos.tsx
 "use client";
 
 import type React from "react";
@@ -411,6 +412,22 @@ export default function Lancamentos() {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+
+                  <div className="flex items-center gap-2 border p-3 rounded-md mt-2">
+                    <Checkbox
+                      id="pago"
+                      checked={formData.pago}
+                      onCheckedChange={(checked) =>
+                        setFormData({ ...formData, pago: checked === true })
+                      }
+                    />
+                    <Label
+                      htmlFor="pago"
+                      className="cursor-pointer flex-1 font-medium"
+                    >
+                      Já foi pago/recebido?
+                    </Label>
                   </div>
 
                   <div className="space-y-2">

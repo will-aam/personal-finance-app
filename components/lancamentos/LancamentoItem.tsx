@@ -1,9 +1,7 @@
-// app/components/lancamentos/LancamentoItem.tsx
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Pencil,
   Trash2,
@@ -45,13 +43,21 @@ export function LancamentoItem({
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 space-y-1">
             <div className="flex items-center gap-2">
-              <button onClick={onTogglePago}>
+              {/* BOTÃO DE TOGGLE DE PAGAMENTO */}
+              <button
+                onClick={onTogglePago}
+                title={
+                  lancamento.pago ? "Marcar como pendente" : "Marcar como pago"
+                }
+                className="hover:scale-110 transition-transform"
+              >
                 {lancamento.pago ? (
                   <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
-                  <XCircle className="h-5 w-5 text-muted-foreground/50" />
+                  <XCircle className="h-5 w-5 text-muted-foreground/50 hover:text-yellow-500" />
                 )}
               </button>
+
               <h3 className="font-semibold leading-none">
                 {lancamento.descricao}
               </h3>
@@ -80,6 +86,7 @@ export function LancamentoItem({
                 <CalendarIcon className="h-3 w-3" />
                 {new Date(lancamento.data_vencimento).toLocaleDateString(
                   "pt-BR",
+                  { timeZone: "UTC" }, // Correção de fuso horário
                 )}
               </span>
             </div>
