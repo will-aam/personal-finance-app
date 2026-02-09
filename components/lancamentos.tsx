@@ -354,7 +354,11 @@ export default function Lancamentos() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label>Tipo</Label>
+                      <Label>
+                        {formData.tipo === "Receita"
+                          ? "Fonte de Renda"
+                          : "Categoria"}
+                      </Label>{" "}
                       <Select
                         value={formData.tipo}
                         onValueChange={(v: any) =>
@@ -394,7 +398,11 @@ export default function Lancamentos() {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Pagamento</Label>
+                    <Label>
+                      {formData.tipo === "Receita"
+                        ? "Recebido via"
+                        : "Forma de Pagamento"}
+                    </Label>{" "}
                     <Select
                       value={formData.forma_pagamento}
                       onValueChange={(v) =>
@@ -426,12 +434,18 @@ export default function Lancamentos() {
                       htmlFor="pago"
                       className="cursor-pointer flex-1 font-medium"
                     >
-                      Já foi pago/recebido?
+                      {formData.tipo === "Receita"
+                        ? "Já foi recebido?"
+                        : "Já foi pago?"}
                     </Label>
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Vencimento</Label>
+                    <Label>
+                      {formData.tipo === "Receita"
+                        ? "Data do Recebimento"
+                        : "Data de Vencimento"}
+                    </Label>
                     <Input
                       type="date"
                       value={formData.data_vencimento}
