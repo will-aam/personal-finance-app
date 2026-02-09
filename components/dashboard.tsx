@@ -3,7 +3,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
+import { authClient } from "@/lib/auth-client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Select,
@@ -15,6 +15,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import {
   TrendingDown,
+  TrendingUp,
   Calendar,
   Target,
   Loader2,
@@ -31,7 +32,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   // --- USER SESSION ---
   const session = authClient.useSession();
   const userId = session.data?.user.id;
-  console.log("MEU ID ATUAL (Copie isso):", userId);
 
   // --- ESTADOS DO FILTRO ---
   const [mesSelecionado, setMesSelecionado] = useState("todos");
@@ -40,16 +40,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
   // --- ESTADOS DE DADOS ---
   const [loading, setLoading] = useState(true);
   const [totalDespesas, setTotalDespesas] = useState(0);
+  const [totalReceitas, setTotalReceitas] = useState(0);
   const [totalDespesasFixas, setTotalDespesasFixas] = useState(0);
 
-  // Voltando com o estado do gráfico
+  // Gráfico
   const [categoriasChart, setCategoriasChart] = useState<any[]>([]);
 
   const [proximosVencimentos, setProximosVencimentos] = useState<any[]>([]);
   const [metaFixada, setMetaFixada] = useState<any>(null);
   const [progressoMeta, setProgressoMeta] = useState(0);
 
-  // 1. Formatar mês para exibição (Ex: "Janeiro de 2025")
+  // 1. Formatar mês
   const formatarMesLegivel = (anoMes: string) => {
     if (anoMes === "todos") return "Todos os períodos";
     const [ano, mes] = anoMes.split("-");
@@ -58,15 +59,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
     return `${nomeMes.charAt(0).toUpperCase() + nomeMes.slice(1)} de ${ano}`;
   };
 
-  // 2. Buscar meses disponíveis no banco
+  // 2. Buscar meses disponíveis
   const fetchMeses = useCallback(async () => {
-    if (!userId) return; // Só busca se tiver usuário
-
+    if (!userId) return;
     try {
       const { data, error } = await supabase
         .from("lancamentos")
         .select("data_vencimento")
-        .eq("user_id", userId) // <--- SEGURANÇA
+        .eq("user_id", userId)
         .order("data_vencimento", { ascending: false });
 
       if (error) throw error;
@@ -81,15 +81,11 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         setMesesDisponiveis(Array.from(mesesSet));
       }
     } catch (error: any) {
-      // MUDANÇA AQUI: Vamos logar o erro completo e stringificado
-      console.error("ERRO DETALHADO:", JSON.stringify(error, null, 2));
-      console.error("Mensagem:", error.message);
-      console.error("Detalhes:", error.details);
-      console.error("Hint:", error.hint);
+      console.error("Erro ao buscar meses:", error.message);
     }
   }, [userId]);
 
-  // 3. Inicialização e Persistência do Filtro
+  // 3. Inicialização Filtro
   useEffect(() => {
     if (userId) {
       fetchMeses();
@@ -107,23 +103,32 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
   // 4. Buscar Dados do Dashboard
   const fetchDashboardData = useCallback(async () => {
-    if (!userId) return; // Só busca se tiver usuário
+    if (!userId) return;
 
     try {
       setLoading(true);
 
-      // --- Query Base de Despesas ---
+      // --- Queries Base ---
+      // Despesas (Mantém a lógica de ver o comprometimento total, pago ou não)
       let queryDespesas = supabase
         .from("lancamentos")
         .select("*")
-        .eq("user_id", userId) // <--- SEGURANÇA
+        .eq("user_id", userId)
         .eq("tipo", "Despesa");
 
-      // --- Query Base de Vencimentos ---
+      // Receitas (ALTERAÇÃO AQUI: Só o que já entrou no bolso)
+      let queryReceitas = supabase
+        .from("lancamentos")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("tipo", "Receita")
+        .eq("pago", true); // <--- TRAVA DE SEGURANÇA: Só soma se estiver marcado como recebido
+
+      // Vencimentos (Contas a Pagar)
       let queryVencimentos = supabase
         .from("lancamentos")
         .select("*")
-        .eq("user_id", userId) // <--- SEGURANÇA
+        .eq("user_id", userId)
         .eq("pago", false)
         .eq("tipo", "Despesa")
         .order("data_vencimento", { ascending: true })
@@ -140,6 +145,10 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
           .gte("data_vencimento", dataInicio)
           .lte("data_vencimento", dataFim);
 
+        queryReceitas = queryReceitas
+          .gte("data_vencimento", dataInicio)
+          .lte("data_vencimento", dataFim);
+
         queryVencimentos = queryVencimentos
           .gte("data_vencimento", dataInicio)
           .lte("data_vencimento", dataFim);
@@ -147,15 +156,21 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       // Executar Queries
       const { data: lancamentosData } = await queryDespesas;
+      const { data: receitasData } = await queryReceitas;
       const { data: vencimentosData } = await queryVencimentos;
 
-      // A) Total Despesas Variáveis
-      const total =
+      // A) Total Despesas
+      const totalDesp =
         lancamentosData?.reduce((acc, curr) => acc + Number(curr.valor), 0) ||
         0;
-      setTotalDespesas(total);
+      setTotalDespesas(totalDesp);
 
-      // B) Cálculo das Categorias (As "Barrinhas")
+      // B) Total Receitas
+      const totalRec =
+        receitasData?.reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
+      setTotalReceitas(totalRec);
+
+      // C) Cálculo das Categorias
       const categoriasMap = lancamentosData?.reduce((acc: any, curr) => {
         acc[curr.categoria] = (acc[curr.categoria] || 0) + Number(curr.valor);
         return acc;
@@ -164,34 +179,33 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       const chartData = Object.entries(categoriasMap || {})
         .map(([name, value]) => ({ name, value: Number(value) }))
         .sort((a, b) => b.value - a.value)
-        .slice(0, 5); // Top 5 categorias
+        .slice(0, 5);
 
       setCategoriasChart(chartData);
 
-      // C) Próximos Vencimentos
+      // D) Próximos Vencimentos
       setProximosVencimentos(vencimentosData || []);
 
-      // D) Despesas Fixas (Total Geral)
+      // E) Despesas Fixas
       const { data: fixasData } = await supabase
         .from("despesas_fixas")
         .select("valor")
-        .eq("user_id", userId); // <--- SEGURANÇA
+        .eq("user_id", userId);
 
       const totalFixas =
         fixasData?.reduce((acc, curr) => acc + Number(curr.valor), 0) || 0;
       setTotalDespesasFixas(totalFixas);
 
-      // E) Meta Fixada
+      // F) Meta Fixada
       const { data: metaData } = await supabase
         .from("metas")
         .select("*")
-        .eq("user_id", userId) // <--- SEGURANÇA
+        .eq("user_id", userId)
         .eq("fixada", true)
         .maybeSingle();
 
       if (metaData) {
         setMetaFixada(metaData);
-        // Calcula porcentagem evitando divisão por zero
         const totalMeta =
           Number(metaData.valor_objetivo) || Number(metaData.valor_total) || 1;
         const atualMeta =
@@ -260,9 +274,27 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
         </div>
       </div>
 
-      {/* TOTAIS */}
-      <div className="grid gap-4 md:grid-cols-2">
-        {/* Card Despesas Variáveis */}
+      {/* TOTAIS (3 COLUNAS) */}
+      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 md:grid-cols-3">
+        {/* 1. RECEITAS (Verde) - AGORA SÓ CONFIRMADAS */}
+        <Card className="border-l-4 border-l-green-500 shadow-sm">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">
+              Entradas Confirmadas
+            </CardTitle>
+            <TrendingUp className="h-4 w-4 text-green-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-green-600">
+              {formatMoney(totalReceitas)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Já recebido em conta
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* 2. DESPESAS VARIÁVEIS (Vermelho) */}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
@@ -275,14 +307,12 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
               {formatMoney(totalDespesas)}
             </div>
             <p className="text-xs text-muted-foreground mt-1">
-              {mesSelecionado === "todos"
-                ? "Total acumulado"
-                : `Total em ${formatarMesLegivel(mesSelecionado)}`}
+              Total acumulado
             </p>
           </CardContent>
         </Card>
 
-        {/* Card Despesas Fixas */}
+        {/* 3. DESPESAS FIXAS (Azul) */}
         <Card
           onClick={() => onNavigate && onNavigate("despesas_fixas")}
           className="cursor-pointer hover:bg-accent/50 transition-colors"
@@ -308,15 +338,14 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
       {/* META FIXADA */}
       {metaFixada && (
         <Card
-          onClick={() => onNavigate && onNavigate("metas")} // <--- ADICIONADO: Navegação
-          className="border-l-4 border-l-primary shadow-sm bg-card/50 backdrop-blur-sm cursor-pointer hover:bg-accent/50 transition-colors" // <--- ADICIONADO: Estilos de clique
+          onClick={() => onNavigate && onNavigate("metas")}
+          className="border-l-4 border-l-primary shadow-sm bg-card/50 backdrop-blur-sm cursor-pointer hover:bg-accent/50 transition-colors"
         >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
               Meta: {metaFixada.nome}
             </CardTitle>
-            {/* Opcional: Adicionar uma setinha indicando que é clicável, igual ao outro card */}
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -352,7 +381,7 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* GRÁFICO (BARRINHAS) + VENCIMENTOS */}
       <div className="grid gap-4 md:grid-cols-2">
-        {/* Gráfico de Barras - "Onde estou gastando?" */}
+        {/* Gráfico */}
         <Card className="shadow-sm">
           <CardHeader>
             <CardTitle className="text-base flex items-center gap-2">
@@ -371,7 +400,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                         {formatMoney(item.value)}
                       </span>
                     </div>
-                    {/* A "barrinha" visual */}
                     <div className="h-2 w-full rounded-full bg-secondary overflow-hidden">
                       <div
                         className="h-full bg-orange-500/80 transition-all duration-500"
@@ -417,7 +445,6 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
                       key={item.id}
                       className="flex items-center justify-between rounded-lg border p-3 hover:bg-accent/50 transition-colors"
                     >
-                      {/* texto */}
                       <div className="space-y-1">
                         <p className="font-medium leading-none text-sm">
                           {item.descricao}
