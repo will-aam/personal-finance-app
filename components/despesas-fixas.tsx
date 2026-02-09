@@ -327,7 +327,7 @@ export default function DespesasFixas() {
                       Dia 05
                     </span>
                   </div>
-                  <p className="text-xl font-bold text-blue-100">
+                  <p className="text-xl font-bold text-blue-500">
                     {formatMoney(totalPagamentoDia05)}
                   </p>
                 </div>
@@ -338,7 +338,7 @@ export default function DespesasFixas() {
                       Dia 15
                     </span>
                   </div>
-                  <p className="text-xl font-bold text-green-100">
+                  <p className="text-xl font-bold text-green-500">
                     {formatMoney(totalPagamentoDia15)}
                   </p>
                 </div>
