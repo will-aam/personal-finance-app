@@ -307,12 +307,17 @@ export default function Dashboard({ onNavigate }: DashboardProps) {
 
       {/* META FIXADA */}
       {metaFixada && (
-        <Card className="border-l-4 border-l-primary shadow-sm bg-card/50 backdrop-blur-sm">
+        <Card
+          onClick={() => onNavigate && onNavigate("metas")} // <--- ADICIONADO: Navegação
+          className="border-l-4 border-l-primary shadow-sm bg-card/50 backdrop-blur-sm cursor-pointer hover:bg-accent/50 transition-colors" // <--- ADICIONADO: Estilos de clique
+        >
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <Target className="h-5 w-5 text-primary" />
               Meta: {metaFixada.nome}
             </CardTitle>
+            {/* Opcional: Adicionar uma setinha indicando que é clicável, igual ao outro card */}
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="space-y-3">

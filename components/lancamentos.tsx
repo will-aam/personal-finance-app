@@ -301,7 +301,7 @@ export default function Lancamentos() {
 
             {/* MODAL BLINDADO (TELA CHEIA MOBILE) */}
             <DialogContent
-              className="w-screen h-screen max-w-none rounded-none sm:rounded-lg sm:h-auto sm:max-w-lg flex flex-col p-0 gap-0"
+              className="w-screen h-screen max-w-none rounded-none sm:rounded-lg sm:h-auto sm:max-h-[85vh] sm:max-w-lg flex flex-col p-0 gap-0" // <--- ALTERADO AQUI
               onInteractOutside={(e) => e.preventDefault()}
             >
               {/* HEADER SIMPLES */}
