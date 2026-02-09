@@ -30,8 +30,9 @@ import {
   X,
   Pencil,
   Rocket,
-  Loader2, // <--- Importante para o loading
-  Check, // <--- Importante para o sucesso
+  Loader2,
+  Check,
+  CheckCircle2, // <--- Novo ícone para indicar que já foi feito no mês
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { EditFixedExpenseDialog } from "./EditFixedExpenseDialog";
@@ -63,9 +64,13 @@ export default function DespesasFixas() {
   const [modoQuinzenal, setModoQuinzenal] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
 
-  // Estados de Feedback Visual (Loading e Sucesso por item)
+  // Estados de Controle (Já lançado no mês?)
+  const [nomesLancadosEsteMes, setNomesLancadosEsteMes] = useState<string[]>(
+    [],
+  );
+
+  // Estados de Feedback Visual (Loading temporário do botão)
   const [loadingId, setLoadingId] = useState<number | null>(null);
-  const [successId, setSuccessId] = useState<number | null>(null);
 
   // Estados do Formulário de Adição
   const [novoNome, setNovoNome] = useState("");
@@ -87,18 +92,43 @@ export default function DespesasFixas() {
   const formatMoney = (val: number) =>
     val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
+  // --- BUSCA DADOS ---
   const fetchData = useCallback(async () => {
     if (!userId) return;
     try {
       setLoading(true);
-      const { data } = await supabase
+
+      // 1. Busca as Despesas Fixas
+      const { data: despesasData } = await supabase
         .from("despesas_fixas")
         .select("*")
         .eq("user_id", userId)
         .order("dia_vencimento", { ascending: true });
 
-      if (data) setDespesas(data);
+      if (despesasData) setDespesas(despesasData);
 
+      // 2. Busca lançamentos DO MÊS ATUAL para verificar duplicidade
+      const hoje = new Date();
+      const ano = hoje.getFullYear();
+      const mes = String(hoje.getMonth() + 1).padStart(2, "0"); // "02"
+      const dataInicio = `${ano}-${mes}-01`;
+      const ultimoDia = new Date(ano, hoje.getMonth() + 1, 0).getDate();
+      const dataFim = `${ano}-${mes}-${ultimoDia}`;
+
+      const { data: lancamentosMes } = await supabase
+        .from("lancamentos")
+        .select("descricao") // Só precisamos do nome para comparar
+        .eq("user_id", userId)
+        .gte("data_vencimento", dataInicio)
+        .lte("data_vencimento", dataFim);
+
+      if (lancamentosMes) {
+        // Cria uma lista simples com os nomes: ["Internet", "Aluguel", ...]
+        const nomes = lancamentosMes.map((l) => l.descricao);
+        setNomesLancadosEsteMes(nomes);
+      }
+
+      // 3. Busca opções (Categorias/Pagamentos)
       const { data: cat } = await supabase
         .from("categorias")
         .select("*")
@@ -188,11 +218,10 @@ export default function DespesasFixas() {
     }
   };
 
-  // --- A MÁGICA VISUAL ACONTECE AQUI ---
+  // --- LÓGICA DE LANÇAMENTO ---
   const handleLancarAgora = async (despesa: DespesaFixa) => {
     if (!userId) return;
 
-    // 1. Ativa o loading específico deste botão
     setLoadingId(despesa.id);
 
     try {
@@ -206,7 +235,6 @@ export default function DespesasFixas() {
       );
       const dataFormatada = dataVencimento.toISOString().split("T")[0];
 
-      // Simula um delay pequeno só pro usuário ver a animação (UX melhor)
       await new Promise((resolve) => setTimeout(resolve, 600));
 
       const { error } = await supabase.from("lancamentos").insert([
@@ -224,17 +252,14 @@ export default function DespesasFixas() {
 
       if (error) throw error;
 
-      // 2. Sucesso! Mostra o Check verde e o Toast
-      setSuccessId(despesa.id);
-      toast({
-        title: "Lançamento Confirmado! ✅",
-        description: `${despesa.nome} foi lançado e pago.`,
-      });
+      // ATUALIZA A LISTA LOCALMENTE (Sem precisar refetch)
+      // Adiciona o nome dessa despesa na lista de "já lançados"
+      setNomesLancadosEsteMes((prev) => [...prev, despesa.nome]);
 
-      // 3. Reseta o estado de sucesso depois de 2 segundos
-      setTimeout(() => {
-        setSuccessId(null);
-      }, 2000);
+      toast({
+        title: "Lançamento Realizado! 🚀",
+        description: `${despesa.nome} foi lançado para este mês.`,
+      });
     } catch (error: any) {
       toast({
         title: "Erro ao lançar",
@@ -242,7 +267,7 @@ export default function DespesasFixas() {
         variant: "destructive",
       });
     } finally {
-      setLoadingId(null); // Desliga o loading
+      setLoadingId(null);
     }
   };
 
@@ -432,83 +457,100 @@ export default function DespesasFixas() {
 
       {/* LISTA */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {despesas.map((despesa) => (
-          <Card
-            key={despesa.id}
-            className="relative group hover:border-primary/50 transition-colors"
-          >
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-lg">{despesa.nome}</CardTitle>
-                <div className="flex gap-1">
-                  {/* BOTÃO FOGUETE COM FEEDBACK VISUAL */}
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    disabled={
-                      loadingId === despesa.id || successId === despesa.id
-                    }
-                    className={`h-8 w-8 transition-all duration-300 ${
-                      successId === despesa.id
-                        ? "bg-green-100 text-green-600 hover:bg-green-200"
-                        : "text-green-600 hover:text-green-700 hover:bg-green-100"
-                    }`}
-                    title="Lançar este mês como Pago"
-                    onClick={() => handleLancarAgora(despesa)}
-                  >
-                    {loadingId === despesa.id ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-green-600" />
-                    ) : successId === despesa.id ? (
-                      <Check className="h-4 w-4 scale-125 font-bold" />
-                    ) : (
-                      <Rocket className="h-4 w-4" />
-                    )}
-                  </Button>
+        {despesas.map((despesa) => {
+          // VERIFICAÇÃO: O nome dessa despesa está na lista de lançados do mês?
+          const jaLancadoNoMes = nomesLancadosEsteMes.includes(despesa.nome);
 
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-muted-foreground hover:text-primary"
-                    onClick={() => {
-                      setEditingExpense(despesa);
-                      setIsEditDialogOpen(true);
-                    }}
+          return (
+            <Card
+              key={despesa.id}
+              className={`relative group transition-colors ${jaLancadoNoMes ? "bg-muted/30 border-dashed" : "hover:border-primary/50"}`}
+            >
+              <CardHeader className="pb-2">
+                <div className="flex justify-between items-start">
+                  <CardTitle
+                    className={`text-lg ${jaLancadoNoMes ? "text-muted-foreground" : ""}`}
                   >
-                    <Pencil className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                    onClick={() => handleDelete(despesa.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                    {despesa.nome}
+                  </CardTitle>
+                  <div className="flex gap-1">
+                    {/* LÓGICA DO BOTÃO MUDOU AQUI */}
+                    {jaLancadoNoMes ? (
+                      // Se já lançou, mostra botão de check desabilitado
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled
+                        className="h-8 w-8 text-muted-foreground cursor-not-allowed"
+                        title="Já lançado neste mês"
+                      >
+                        <CheckCircle2 className="h-4 w-4" />
+                      </Button>
+                    ) : (
+                      // Se NÃO lançou, mostra o foguete
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        disabled={loadingId === despesa.id}
+                        className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-100"
+                        title="Lançar este mês como Pago"
+                        onClick={() => handleLancarAgora(despesa)}
+                      >
+                        {loadingId === despesa.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Rocket className="h-4 w-4" />
+                        )}
+                      </Button>
+                    )}
+
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      onClick={() => {
+                        setEditingExpense(despesa);
+                        setIsEditDialogOpen(true);
+                      }}
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleDelete(despesa.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              <CardDescription>
-                Vence todo dia {despesa.dia_vencimento}
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold mb-2">
-                {formatMoney(despesa.valor)}
-              </div>
-              <div className="text-xs text-muted-foreground flex flex-wrap gap-2">
-                {despesa.categoria && (
-                  <span className="bg-secondary px-2 py-1 rounded border">
-                    {despesa.categoria}
-                  </span>
-                )}
-                {despesa.forma_pagamento && (
-                  <span className="bg-secondary px-2 py-1 rounded border">
-                    {despesa.forma_pagamento}
-                  </span>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+                <CardDescription>
+                  Vence todo dia {despesa.dia_vencimento}
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold mb-2 ${jaLancadoNoMes ? "text-muted-foreground" : ""}`}
+                >
+                  {formatMoney(despesa.valor)}
+                </div>
+                <div className="text-xs text-muted-foreground flex flex-wrap gap-2">
+                  {despesa.categoria && (
+                    <span className="bg-secondary px-2 py-1 rounded border">
+                      {despesa.categoria}
+                    </span>
+                  )}
+                  {despesa.forma_pagamento && (
+                    <span className="bg-secondary px-2 py-1 rounded border">
+                      {despesa.forma_pagamento}
+                    </span>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
         {despesas.length === 0 && !loading && (
           <div className="col-span-full text-center py-10 text-muted-foreground border border-dashed rounded-lg">
             Nenhuma despesa fixa cadastrada.
