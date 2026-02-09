@@ -40,6 +40,16 @@ export interface Meta {
   auto_meses_duracao?: number;
   auto_ultimo_processamento?: string;
 }
+export interface DespesaFixa {
+  id: number;
+  user_id: string;
+  nome: string;
+  valor: number;
+  dia_vencimento: number;
+  categoria?: string;
+  forma_pagamento?: string;
+  created_at?: string;
+}
 
 export interface Categoria {
   id: number;

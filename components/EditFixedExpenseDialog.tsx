@@ -1,9 +1,9 @@
-// app/components/EditFixedExpenseDialog.tsx
+// components/EditFixedExpenseDialog.tsx
 "use client";
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
+import { authClient } from "@/lib/auth-client";
 import {
   Dialog,
   DialogContent,
@@ -14,22 +14,38 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 
-// Definimos a interface aqui para o componente saber o que esperar
+interface ItemOpcao {
+  id: number;
+  nome: string;
+}
+
 interface DespesaFixa {
   id: number;
   nome: string;
   valor: number;
   dia_vencimento: number;
+  categoria?: string;
+  forma_pagamento?: string;
 }
 
 interface EditFixedExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   expense: DespesaFixa | null;
-  onSuccess: () => void; // Função para recarregar a lista após salvar
+  onSuccess: () => void;
+  // Adicionamos as props que estavam faltando
+  categorias: ItemOpcao[];
+  formasPagamento: ItemOpcao[];
 }
 
 export function EditFixedExpenseDialog({
@@ -37,36 +53,36 @@ export function EditFixedExpenseDialog({
   onOpenChange,
   expense,
   onSuccess,
+  categorias,
+  formasPagamento,
 }: EditFixedExpenseDialogProps) {
   const { toast } = useToast();
-
-  // --- USER SESSION ---
   const session = authClient.useSession();
   const userId = session.data?.user.id;
 
   const [loading, setLoading] = useState(false);
-
-  // Estados locais para edição
   const [nome, setNome] = useState("");
   const [valor, setValor] = useState("");
   const [dia, setDia] = useState("");
+  const [categoria, setCategoria] = useState("");
+  const [pagamento, setPagamento] = useState("");
 
-  // Sempre que a despesa selecionada mudar (abrir o modal), preenchemos os campos
   useEffect(() => {
     if (expense) {
       setNome(expense.nome);
       setValor(String(expense.valor));
       setDia(String(expense.dia_vencimento));
+      setCategoria(expense.categoria || "");
+      setPagamento(expense.forma_pagamento || "");
     }
   }, [expense]);
 
   const handleSave = async () => {
-    if (!userId) return; // Segurança básica
-    if (!expense) return;
+    if (!userId || !expense) return;
     if (!nome || !valor || !dia) {
       toast({
         title: "Campos obrigatórios",
-        description: "Preencha todos os campos.",
+        description: "Nome, Valor e Dia são obrigatórios.",
         variant: "destructive",
       });
       return;
@@ -74,22 +90,23 @@ export function EditFixedExpenseDialog({
 
     try {
       setLoading(true);
-
       const { error } = await supabase
         .from("despesas_fixas")
         .update({
           nome,
           valor: Number(valor),
           dia_vencimento: Number(dia),
+          categoria: categoria || null,
+          forma_pagamento: pagamento || null,
         })
         .eq("id", expense.id)
-        .eq("user_id", userId); // <--- SEGURANÇA: Só edita se for meu
+        .eq("user_id", userId);
 
       if (error) throw error;
 
       toast({ title: "Despesa atualizada com sucesso!" });
-      onSuccess(); // Avisa o componente pai para atualizar a lista
-      onOpenChange(false); // Fecha o modal
+      onSuccess();
+      onOpenChange(false);
     } catch (error: any) {
       toast({
         title: "Erro ao atualizar",
@@ -103,43 +120,67 @@ export function EditFixedExpenseDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Editar Despesa Fixa</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-4">
           <div className="space-y-2">
-            <Label htmlFor="edit-nome">Nome</Label>
-            <Input
-              id="edit-nome"
-              value={nome}
-              onChange={(e) => setNome(e.target.value)}
-              placeholder="Ex: Aluguel"
-            />
+            <Label>Nome</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="edit-valor">Valor (R$)</Label>
+              <Label>Valor (R$)</Label>
               <Input
-                id="edit-valor"
                 type="number"
                 step="0.01"
                 value={valor}
                 onChange={(e) => setValor(e.target.value)}
-                placeholder="0.00"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="edit-dia">Dia Vencimento</Label>
+              <Label>Dia Vencimento</Label>
               <Input
-                id="edit-dia"
                 type="number"
                 min="1"
                 max="31"
                 value={dia}
                 onChange={(e) => setDia(e.target.value)}
-                placeholder="Dia"
               />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Categoria (Padrão)</Label>
+              <Select value={categoria} onValueChange={setCategoria}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {categorias.map((c) => (
+                    <SelectItem key={c.id} value={c.nome}>
+                      {c.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Pagamento (Padrão)</Label>
+              <Select value={pagamento} onValueChange={setPagamento}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {formasPagamento.map((f) => (
+                    <SelectItem key={f.id} value={f.nome}>
+                      {f.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -149,7 +190,7 @@ export function EditFixedExpenseDialog({
           </Button>
           <Button onClick={handleSave} disabled={loading}>
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Salvar Alterações
+            Salvar
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,110 +1,159 @@
-// app/components/despesas-fixas.tsx
+// components/despesas-fixas.tsx
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/lib/supabase";
-import { authClient } from "@/lib/auth-client"; // <--- NOVO IMPORT
-import { Card, CardContent } from "@/components/ui/card";
+import { authClient } from "@/lib/auth-client";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { useToast } from "@/hooks/use-toast";
-import { EditFixedExpenseDialog } from "@/components/EditFixedExpenseDialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Plus,
   Trash2,
-  Loader2,
-  ArrowLeft,
   TrendingDown,
   Wallet,
   X,
-  Calendar,
   Pencil,
+  Rocket,
+  Loader2, // <--- Importante para o loading
+  Check, // <--- Importante para o sucesso
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { EditFixedExpenseDialog } from "./EditFixedExpenseDialog";
 
-interface DespesasFixasProps {
-  onBack: () => void;
-}
-
+// Interfaces
 interface DespesaFixa {
   id: number;
   nome: string;
   valor: number;
   dia_vencimento: number;
+  categoria?: string;
+  forma_pagamento?: string;
 }
 
-export default function DespesasFixas({ onBack }: DespesasFixasProps) {
-  const { toast } = useToast();
+interface ItemOpcao {
+  id: number;
+  nome: string;
+}
 
-  // --- USER SESSION ---
+export default function DespesasFixas() {
+  // Estados Básicos
+  const [despesas, setDespesas] = useState<DespesaFixa[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
   const session = authClient.useSession();
   const userId = session.data?.user.id;
 
-  const [items, setItems] = useState<DespesaFixa[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  // Estados do Formulário de Criação
+  // Estados do Layout
+  const [modoQuinzenal, setModoQuinzenal] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
+
+  // Estados de Feedback Visual (Loading e Sucesso por item)
+  const [loadingId, setLoadingId] = useState<number | null>(null);
+  const [successId, setSuccessId] = useState<number | null>(null);
+
+  // Estados do Formulário de Adição
   const [novoNome, setNovoNome] = useState("");
   const [novoValor, setNovoValor] = useState("");
   const [novoDia, setNovoDia] = useState("");
+  const [novaCategoria, setNovaCategoria] = useState("");
+  const [novoPagamento, setNovoPagamento] = useState("");
 
-  // Estado do Modo Quinzenal
-  const [modoQuinzenal, setModoQuinzenal] = useState(false);
+  // Opções do Banco
+  const [categoriasDB, setCategoriasDB] = useState<ItemOpcao[]>([]);
+  const [formasPagamentoDB, setFormasPagamentoDB] = useState<ItemOpcao[]>([]);
 
-  // Estado para Edição
-  const [editingItem, setEditingItem] = useState<DespesaFixa | null>(null);
+  // Edição
+  const [editingExpense, setEditingExpense] = useState<DespesaFixa | null>(
+    null,
+  );
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
 
-  useEffect(() => {
-    const salvo = localStorage.getItem("modoQuinzenalFinanceApp");
-    if (salvo === "true") {
-      setModoQuinzenal(true);
-    }
-  }, []);
+  const formatMoney = (val: number) =>
+    val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
-  const toggleModoQuinzenal = (checked: boolean) => {
-    setModoQuinzenal(checked);
-    localStorage.setItem("modoQuinzenalFinanceApp", String(checked));
-  };
-
-  const fetchDespesas = useCallback(async () => {
-    if (!userId) return; // Só busca se tiver usuário
-
+  const fetchData = useCallback(async () => {
+    if (!userId) return;
     try {
       setLoading(true);
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("despesas_fixas")
         .select("*")
-        .eq("user_id", userId) // <--- SEGURANÇA
+        .eq("user_id", userId)
         .order("dia_vencimento", { ascending: true });
 
-      if (error) throw error;
-      setItems(data || []);
-    } catch (error: any) {
-      toast({ title: "Erro ao carregar", description: error.message });
+      if (data) setDespesas(data);
+
+      const { data: cat } = await supabase
+        .from("categorias")
+        .select("*")
+        .order("nome");
+      if (cat) setCategoriasDB(cat);
+
+      const { data: pay } = await supabase
+        .from("formas_pagamento")
+        .select("*")
+        .order("nome");
+      if (pay) setFormasPagamentoDB(pay);
+    } catch (error) {
+      console.error(error);
     } finally {
       setLoading(false);
     }
-  }, [toast, userId]);
+  }, [userId]);
 
   useEffect(() => {
-    if (userId) {
-      fetchDespesas();
-    }
-  }, [fetchDespesas, userId]);
+    if (userId) fetchData();
+  }, [userId, fetchData]);
+
+  // Cálculos do Resumo
+  const totalComprometido = despesas.reduce(
+    (acc, curr) => acc + Number(curr.valor),
+    0,
+  );
+
+  const totalPagamentoDia05 = despesas
+    .filter((d) => d.dia_vencimento <= 10)
+    .reduce((acc, curr) => acc + Number(curr.valor), 0);
+
+  const totalPagamentoDia15 = despesas
+    .filter((d) => d.dia_vencimento > 10)
+    .reduce((acc, curr) => acc + Number(curr.valor), 0);
 
   const handleAdicionar = async () => {
     if (!userId) return;
-    if (!novoNome || !novoValor || !novoDia) return;
+    if (!novoNome || !novoValor || !novoDia) {
+      toast({
+        title: "Preencha os campos obrigatórios",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       const { error } = await supabase.from("despesas_fixas").insert([
         {
-          user_id: userId, // <--- SEGURANÇA: Cria com dono
+          user_id: userId,
           nome: novoNome,
           valor: Number(novoValor),
           dia_vencimento: Number(novoDia),
+          categoria: novaCategoria || "Contas Fixas",
+          forma_pagamento: novoPagamento || "Pix",
         },
       ]);
 
@@ -114,140 +163,101 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
       setNovoNome("");
       setNovoValor("");
       setNovoDia("");
+      setNovaCategoria("");
+      setNovoPagamento("");
       setIsFormOpen(false);
-      fetchDespesas();
+      fetchData();
     } catch (error: any) {
       toast({
-        title: "Erro ao salvar",
+        title: "Erro ao adicionar",
         description: error.message,
         variant: "destructive",
       });
     }
   };
 
-  const handleExcluir = async (id: number) => {
-    if (!userId) return;
-    if (!confirm("Tem certeza que deseja excluir esta despesa?")) return;
-    try {
-      const { error } = await supabase
-        .from("despesas_fixas")
-        .delete()
-        .eq("id", id)
-        .eq("user_id", userId); // <--- SEGURANÇA: Só apaga se for meu
-
-      if (error) throw error;
-
-      setItems(items.filter((item) => item.id !== id));
+  const handleDelete = async (id: number) => {
+    if (!confirm("Remover esta despesa fixa?")) return;
+    const { error } = await supabase
+      .from("despesas_fixas")
+      .delete()
+      .eq("id", id);
+    if (!error) {
       toast({ title: "Removido com sucesso" });
-    } catch (error: any) {
-      toast({ title: "Erro ao excluir", variant: "destructive" });
+      fetchData();
     }
   };
 
-  // CÁLCULOS
-  const totalComprometido = items.reduce((acc, item) => acc + item.valor, 0);
-  const itemsDia05 = items.filter((item) => item.dia_vencimento < 15);
-  const itemsDia15 = items.filter((item) => item.dia_vencimento >= 15);
-  const totalPagamentoDia05 = itemsDia05.reduce(
-    (acc, item) => acc + item.valor,
-    0,
-  );
-  const totalPagamentoDia15 = itemsDia15.reduce(
-    (acc, item) => acc + item.valor,
-    0,
-  );
+  // --- A MÁGICA VISUAL ACONTECE AQUI ---
+  const handleLancarAgora = async (despesa: DespesaFixa) => {
+    if (!userId) return;
 
-  const formatMoney = (val: number) =>
-    val.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    // 1. Ativa o loading específico deste botão
+    setLoadingId(despesa.id);
 
-  const DespesaCard = ({
-    item,
-    colorClass,
-  }: {
-    item: DespesaFixa;
-    colorClass?: string;
-  }) => (
-    <Card
-      className={`transition-all duration-200 hover:shadow-md hover:-translate-y-1 bg-card/40 ${
-        colorClass || "border-border/40"
-      }`}
-    >
-      <CardContent className="p-4">
-        <div className="flex flex-col gap-3">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center gap-3">
-              <div className="flex flex-col items-center justify-center h-12 w-12 rounded-lg bg-muted/50 border border-border/50">
-                <Calendar className="h-4 w-4 text-muted-foreground mb-1" />
-                <span className="text-xs font-bold">{item.dia_vencimento}</span>
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="font-medium text-sm sm:text-base">{item.nome}</p>
-              </div>
-            </div>
+    try {
+      const hoje = new Date();
+      const anoAtual = hoje.getFullYear();
+      const mesAtual = hoje.getMonth();
+      const dataVencimento = new Date(
+        anoAtual,
+        mesAtual,
+        despesa.dia_vencimento,
+      );
+      const dataFormatada = dataVencimento.toISOString().split("T")[0];
 
-            {/* Ações (Editar e Excluir) */}
-            <div className="flex gap-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10"
-                onClick={() => setEditingItem(item)} // Abre o modal de edição
-              >
-                <Pencil className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-8 w-8 p-0 text-muted-foreground hover:text-red-400 hover:bg-red-50/10"
-                onClick={() => handleExcluir(item.id)}
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="text-right">
-            <p className="font-bold text-base sm:text-lg">
-              {formatMoney(item.valor)}
-            </p>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+      // Simula um delay pequeno só pro usuário ver a animação (UX melhor)
+      await new Promise((resolve) => setTimeout(resolve, 600));
+
+      const { error } = await supabase.from("lancamentos").insert([
+        {
+          user_id: userId,
+          descricao: despesa.nome,
+          valor: despesa.valor,
+          tipo: "Despesa",
+          categoria: despesa.categoria || "Contas Fixas",
+          forma_pagamento: despesa.forma_pagamento || "Pix",
+          data_vencimento: dataFormatada,
+          pago: true,
+        },
+      ]);
+
+      if (error) throw error;
+
+      // 2. Sucesso! Mostra o Check verde e o Toast
+      setSuccessId(despesa.id);
+      toast({
+        title: "Lançamento Confirmado! ✅",
+        description: `${despesa.nome} foi lançado e pago.`,
+      });
+
+      // 3. Reseta o estado de sucesso depois de 2 segundos
+      setTimeout(() => {
+        setSuccessId(null);
+      }, 2000);
+    } catch (error: any) {
+      toast({
+        title: "Erro ao lançar",
+        description: error.message,
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingId(null); // Desliga o loading
+    }
+  };
 
   return (
-    <div className="space-y-6 pb-20 p-4 md:p-6 max-w-5xl mx-auto animate-in fade-in slide-in-from-right-8 duration-300">
-      {/* Componente de Edição (Modal) */}
-      <EditFixedExpenseDialog
-        open={!!editingItem}
-        onOpenChange={(open) => !open && setEditingItem(null)}
-        expense={editingItem}
-        onSuccess={fetchDespesas}
-      />
-
-      {/* Header */}
+    <div className="space-y-6 p-4 md:p-6 pb-24 animate-in fade-in slide-in-from-bottom-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={onBack}
-            className="rounded-full hover:bg-accent/50"
-          >
-            <ArrowLeft className="h-6 w-6" />
-          </Button>
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
-              Despesas Fixas
-            </h1>
-            <p className="text-muted-foreground hidden sm:block text-sm">
-              Controle seus pagamentos recorrentes
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold">Despesas Fixas</h1>
+          <p className="text-muted-foreground">
+            Gerencie seus gastos recorrentes
+          </p>
         </div>
       </div>
 
-      {/* Card Resumo */}
+      {/* CARD RESUMO */}
       <Card className="from-red-950/20 to-red-900/10 border-red-900/30 shadow-sm relative overflow-hidden">
         <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/5 rounded-full -mr-16 -mt-16 blur-xl"></div>
         <CardContent className="p-6 relative">
@@ -277,7 +287,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                 <Switch
                   id="quinzena-mode"
                   checked={modoQuinzenal}
-                  onCheckedChange={toggleModoQuinzenal}
+                  onCheckedChange={setModoQuinzenal}
                   className="scale-75 data-[state=checked]:bg-red-500"
                 />
               </div>
@@ -313,7 +323,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
         </CardContent>
       </Card>
 
-      {/* Botão Adicionar */}
+      {/* BOTÃO ADICIONAR */}
       <div className="space-y-4">
         {!isFormOpen ? (
           <Button
@@ -339,8 +349,8 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                 </Button>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-4 items-end">
-                <div className="md:col-span-2 space-y-2">
+              <div className="grid gap-4 md:grid-cols-12 items-end">
+                <div className="md:col-span-3 space-y-2">
                   <Label>Nome</Label>
                   <Input
                     value={novoNome}
@@ -349,7 +359,7 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                     autoFocus
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="md:col-span-2 space-y-2">
                   <Label>Valor (R$)</Label>
                   <Input
                     type="number"
@@ -357,28 +367,62 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
                     value={novoValor}
                     onChange={(e) => setNovoValor(e.target.value)}
                     placeholder="0,00"
-                    inputMode="decimal"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label>Vencimento</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      type="number"
-                      min="1"
-                      max="31"
-                      value={novoDia}
-                      onChange={(e) => setNovoDia(e.target.value)}
-                      placeholder="Dia"
-                      inputMode="numeric"
-                    />
-                    <Button
-                      onClick={handleAdicionar}
-                      className="bg-primary text-primary-foreground"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Vencimento (Dia)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={novoDia}
+                    onChange={(e) => setNovoDia(e.target.value)}
+                    placeholder="Dia"
+                  />
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Categoria</Label>
+                  <Select
+                    value={novaCategoria}
+                    onValueChange={setNovaCategoria}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categoriasDB.map((c) => (
+                        <SelectItem key={c.id} value={c.nome}>
+                          {c.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="md:col-span-2 space-y-2">
+                  <Label>Pagamento</Label>
+                  <Select
+                    value={novoPagamento}
+                    onValueChange={setNovoPagamento}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {formasPagamentoDB.map((f) => (
+                        <SelectItem key={f.id} value={f.nome}>
+                          {f.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="md:col-span-1">
+                  <Button
+                    onClick={handleAdicionar}
+                    className="w-full bg-primary text-primary-foreground"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
                 </div>
               </div>
             </CardContent>
@@ -386,83 +430,100 @@ export default function DespesasFixas({ onBack }: DespesasFixasProps) {
         )}
       </div>
 
-      {/* Lista */}
-      <div className="space-y-4">
-        <h3 className="font-semibold text-lg tracking-tight px-1">
-          Suas Contas
-        </h3>
+      {/* LISTA */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {despesas.map((despesa) => (
+          <Card
+            key={despesa.id}
+            className="relative group hover:border-primary/50 transition-colors"
+          >
+            <CardHeader className="pb-2">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-lg">{despesa.nome}</CardTitle>
+                <div className="flex gap-1">
+                  {/* BOTÃO FOGUETE COM FEEDBACK VISUAL */}
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    disabled={
+                      loadingId === despesa.id || successId === despesa.id
+                    }
+                    className={`h-8 w-8 transition-all duration-300 ${
+                      successId === despesa.id
+                        ? "bg-green-100 text-green-600 hover:bg-green-200"
+                        : "text-green-600 hover:text-green-700 hover:bg-green-100"
+                    }`}
+                    title="Lançar este mês como Pago"
+                    onClick={() => handleLancarAgora(despesa)}
+                  >
+                    {loadingId === despesa.id ? (
+                      <Loader2 className="h-4 w-4 animate-spin text-green-600" />
+                    ) : successId === despesa.id ? (
+                      <Check className="h-4 w-4 scale-125 font-bold" />
+                    ) : (
+                      <Rocket className="h-4 w-4" />
+                    )}
+                  </Button>
 
-        {loading ? (
-          <div className="flex justify-center py-12">
-            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          </div>
-        ) : items.length === 0 ? (
-          <div className="text-center py-16 border rounded-xl border-dashed bg-muted/5 text-muted-foreground">
-            <p>Nenhuma conta cadastrada.</p>
-            <Button variant="link" onClick={() => setIsFormOpen(true)}>
-              Cadastrar a primeira
-            </Button>
-          </div>
-        ) : modoQuinzenal ? (
-          <div className="grid md:grid-cols-2 gap-6 animate-in fade-in duration-300">
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-blue-500/20">
-                <h4 className="font-bold text-sm text-blue-400 uppercase tracking-wider">
-                  1ª Quinzena (Dia 05)
-                </h4>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => {
+                      setEditingExpense(despesa);
+                      setIsEditDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleDelete(despesa.id)}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
-              {itemsDia05.length === 0 ? (
-                <div className="p-4 border border-dashed border-blue-500/10 rounded-lg text-center">
-                  <p className="text-xs text-muted-foreground italic">
-                    Nada para o dia 05.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {itemsDia05.map((item) => (
-                    <DespesaCard
-                      key={item.id}
-                      item={item}
-                      colorClass="border-l-4 border-l-blue-500/50"
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 pb-2 border-b border-green-500/20">
-                <h4 className="font-bold text-sm text-green-400 uppercase tracking-wider">
-                  2ª Quinzena (Dia 15)
-                </h4>
+              <CardDescription>
+                Vence todo dia {despesa.dia_vencimento}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold mb-2">
+                {formatMoney(despesa.valor)}
               </div>
-              {itemsDia15.length === 0 ? (
-                <div className="p-4 border border-dashed border-green-500/10 rounded-lg text-center">
-                  <p className="text-xs text-muted-foreground italic">
-                    Nada para o dia 15.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {itemsDia15.map((item) => (
-                    <DespesaCard
-                      key={item.id}
-                      item={item}
-                      colorClass="border-l-4 border-l-green-500/50"
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((item) => (
-              <DespesaCard key={item.id} item={item} />
-            ))}
+              <div className="text-xs text-muted-foreground flex flex-wrap gap-2">
+                {despesa.categoria && (
+                  <span className="bg-secondary px-2 py-1 rounded border">
+                    {despesa.categoria}
+                  </span>
+                )}
+                {despesa.forma_pagamento && (
+                  <span className="bg-secondary px-2 py-1 rounded border">
+                    {despesa.forma_pagamento}
+                  </span>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {despesas.length === 0 && !loading && (
+          <div className="col-span-full text-center py-10 text-muted-foreground border border-dashed rounded-lg">
+            Nenhuma despesa fixa cadastrada.
           </div>
         )}
       </div>
+
+      <EditFixedExpenseDialog
+        open={isEditDialogOpen}
+        onOpenChange={setIsEditDialogOpen}
+        expense={editingExpense}
+        onSuccess={fetchData}
+        categorias={categoriasDB}
+        formasPagamento={formasPagamentoDB}
+      />
     </div>
   );
 }
